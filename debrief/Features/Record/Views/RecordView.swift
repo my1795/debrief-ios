@@ -69,7 +69,7 @@ struct RecordView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
             
-            Text(formatTime(viewModel.recordingTime))
+            Text(formatTime(Int(viewModel.recordingTime)))
                 .font(.system(size: 48, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.vertical, 48)
@@ -107,7 +107,7 @@ struct RecordView: View {
                 HStack {
                     Text("Duration:")
                         .foregroundColor(.white.opacity(0.7))
-                    Text(formatTime(viewModel.recordingTime))
+                    Text(formatTime(Int(viewModel.recordingTime)))
                         .fontWeight(.semibold)
                         .foregroundColor(Color(hex: "5EEAD4")) // teal-300
                 }
