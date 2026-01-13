@@ -11,6 +11,7 @@ import Contacts
 protocol ContactStoreServiceProtocol {
     func requestAccess() async -> Bool
     func fetchContacts() async throws -> [Contact]
+    func getContactName(for id: String) async -> String?
 }
 
 class ContactStoreService: ContactStoreServiceProtocol {
@@ -57,5 +58,25 @@ class ContactStoreService: ContactStoreServiceProtocol {
         }
         
         return contacts
+    }
+    
+    func getContactName(for id: String) async -> String? {
+        // Ensure we are not on main thread for heavy lifting, though CoreData/Contacts is fast
+        return await Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return nil }
+            let keys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactOrganizationNameKey] as [CNKeyDescriptor]
+            do {
+                let contact = try self.store.unifiedContact(withIdentifier: id, keysToFetch: keys)
+                let fullName = [contact.givenName, contact.familyName]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                let result = fullName.isEmpty ? contact.organizationName : fullName
+                // print("DEBUG SERVICE: Found contact: \(result)")
+                return result
+            } catch {
+                print("DEBUG SERVICE: Error fetching contact \(id): \(error)")
+                return nil
+            }
+        }.value
     }
 }

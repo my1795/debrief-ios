@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import Contacts
 
 enum RecordingState {
     case recording
@@ -18,44 +19,77 @@ enum RecordingState {
 @MainActor
 class RecordViewModel: ObservableObject {
     // MARK: - Published State
+    // MARK: - Published State
+    // MARK: - Published State
     @Published var state: RecordingState = .recording
     @Published var recordingTime: TimeInterval = 0
     @Published var selectedContact: Contact?
     @Published var searchQuery: String = ""
     @Published var contacts: [Contact] = []
-    @Published var filteredContacts: [Contact] = []
     
-    // New Contact Form
-    @Published var isNewContactFormVisible: Bool = false
-    @Published var newContactName: String = ""
-    @Published var newContactHandle: String = ""
+    // Derived state for UI
+    var groupedContacts: [(key: String, value: [Contact])] {
+        let source = searchQuery.isEmpty ? contacts : contacts.filter {
+            $0.name.localizedCaseInsensitiveContains(searchQuery) ||
+            ($0.handle?.localizedCaseInsensitiveContains(searchQuery) ?? false)
+        }
+        
+        let grouped = Dictionary(grouping: source) { contact in
+            String(contact.name.prefix(1)).uppercased()
+        }
+        
+        return grouped.sorted { $0.key < $1.key }
+    }
     
     // MARK: - Dependencies
     private let recorderService: AudioRecorderServiceProtocol
     private let apiService = APIService.shared
+    private let contactStoreService: ContactStoreServiceProtocol
     
     // MARK: - Internal State
     private var recordedFileURL: URL?
     private var timerTask: Task<Void, Never>?
+    private var contactStoreObserver: NSObjectProtocol?
     
-    init(recorderService: AudioRecorderServiceProtocol = AudioRecorderService()) {
+    init(recorderService: AudioRecorderServiceProtocol = AudioRecorderService(),
+         contactStoreService: ContactStoreServiceProtocol = ContactStoreService()) {
         self.recorderService = recorderService
-        loadMockContacts()
+        self.contactStoreService = contactStoreService
         
-        // Auto-start recording as per previous flow behavior
+        setupContactObserver()
+        
         Task {
+            await fetchContacts()
             await startRecording()
         }
     }
     
-    func loadMockContacts() {
-        self.contacts = [
-            Contact(id: UUID().uuidString, name: "Ahmet", handle: "TechCorp", totalDebriefs: 5),
-            Contact(id: UUID().uuidString, name: "Sarah", handle: "Design Lead", totalDebriefs: 3),
-            Contact(id: UUID().uuidString, name: "Mehmet", handle: "Engineering", totalDebriefs: 8),
-            Contact(id: UUID().uuidString, name: "Elif", handle: "Product", totalDebriefs: 2)
-        ]
-        self.filteredContacts = self.contacts
+    private func setupContactObserver() {
+        contactStoreObserver = NotificationCenter.default.addObserver(
+            forName: .CNContactStoreDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { [weak self] in
+                await self?.fetchContacts()
+            }
+        }
+    }
+    
+    func fetchContacts() async {
+        guard await contactStoreService.requestAccess() else {
+            print("Access denied")
+            return
+        }
+        
+        do {
+            let fetched = try await contactStoreService.fetchContacts()
+            await MainActor.run {
+                self.contacts = fetched.sorted { $0.name < $1.name }
+            }
+        } catch {
+            print("Failed to fetch contacts: \(error)")
+        }
     }
     
     // MARK: - Recording Actions
@@ -103,45 +137,13 @@ class RecordViewModel: ObservableObject {
     
     // MARK: - Contact Actions
     
-    func filterContacts() {
-        if searchQuery.isEmpty {
-            filteredContacts = contacts
-        } else {
-            filteredContacts = contacts.filter {
-                $0.name.localizedCaseInsensitiveContains(searchQuery) ||
-                ($0.handle?.localizedCaseInsensitiveContains(searchQuery) ?? false)
-            }
-        }
-    }
+    // Filter logic handled in groupedContacts computed property
     
     func selectContact(_ contact: Contact) {
         selectedContact = contact
     }
     
-    func createContact() {
-        guard !newContactName.isEmpty else { return }
-        
-        Task {
-            do {
-                let newContact = try await apiService.createContact(name: newContactName, handle: newContactHandle)
-                contacts.append(newContact)
-                selectContact(newContact)
-                isNewContactFormVisible = false
-                newContactName = ""
-                newContactHandle = ""
-                filterContacts()
-            } catch {
-                print("Failed to create contact: \(error)")
-                let newContact = Contact(id: UUID().uuidString, name: newContactName, handle: newContactHandle, totalDebriefs: 0)
-                contacts.append(newContact)
-                selectContact(newContact)
-                isNewContactFormVisible = false 
-                newContactName = ""
-                newContactHandle = ""
-                filterContacts()
-            }
-        }
-    }
+
     
     // MARK: - Processing Actions
     
@@ -174,5 +176,8 @@ class RecordViewModel: ObservableObject {
     
     deinit {
         timerTask?.cancel()
+        if let observer = contactStoreObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 }

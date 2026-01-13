@@ -17,6 +17,7 @@ enum DebriefStatus: String, Codable {
 
 struct Debrief: Identifiable, Codable {
     let id: String
+    let contactId: String // Added to support local name resolution
     let contactName: String
     let occurredAt: Date
     let duration: TimeInterval // seconds

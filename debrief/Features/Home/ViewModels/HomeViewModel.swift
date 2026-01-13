@@ -15,8 +15,10 @@ class HomeViewModel: ObservableObject {
     @Published var filteredDebriefs: [Debrief] = []
     
     private let apiService = APIService.shared
+    private let contactStoreService: ContactStoreServiceProtocol
     
-    init() {
+    init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService()) {
+        self.contactStoreService = contactStoreService
         Task {
             await fetchDebriefs()
         }
@@ -25,8 +27,63 @@ class HomeViewModel: ObservableObject {
     func fetchDebriefs() async {
         do {
             let fetchedDebriefs = try await apiService.getDebriefs()
+            
+            // Resolve Names locally if missing
+            var resolvedDebriefs: [Debrief] = []
+            
+            for debrief in fetchedDebriefs {
+                var finalDebrief = debrief
+                
+                // Since APIService now returns empty name, we MUST resolve locally using contactId
+                if !debrief.contactId.isEmpty {
+                    // Try to resolve name from device contacts
+                    if let localName = await contactStoreService.getContactName(for: debrief.contactId) {
+                        finalDebrief = Debrief(
+                            id: debrief.id,
+                            contactId: debrief.contactId,
+                            contactName: localName, // Resolved Name
+                            occurredAt: debrief.occurredAt,
+                            duration: debrief.duration,
+                            status: debrief.status,
+                            summary: debrief.summary,
+                            transcript: debrief.transcript,
+                            actionItems: debrief.actionItems
+                        )
+                    } else {
+                         // Fallback if ID not found in device (e.g. deleted contact)
+                         // finalDebrief name remains "" or we can set "Deleted Contact"
+                         finalDebrief = Debrief(
+                            id: debrief.id,
+                            contactId: debrief.contactId,
+                            contactName: "Unknown Contact", // Or keep empty? User said "Deleted Contact" in example code
+                            occurredAt: debrief.occurredAt,
+                            duration: debrief.duration,
+                            status: debrief.status,
+                            summary: debrief.summary,
+                            transcript: debrief.transcript,
+                            actionItems: debrief.actionItems
+                        )
+                    }
+                } else {
+                    // No contact ID involved
+                    finalDebrief = Debrief(
+                        id: debrief.id,
+                        contactId: "",
+                        contactName: "Unknown",
+                        occurredAt: debrief.occurredAt,
+                        duration: debrief.duration,
+                        status: debrief.status,
+                        summary: debrief.summary,
+                        transcript: debrief.transcript,
+                        actionItems: debrief.actionItems
+                    )
+                }
+                resolvedDebriefs.append(finalDebrief)
+            }
+            
+            let finalResult = resolvedDebriefs
             await MainActor.run {
-                self.debriefs = fetchedDebriefs
+                self.debriefs = finalResult
                 self.filterDebriefs()
             }
         } catch {
@@ -47,6 +104,8 @@ class HomeViewModel: ObservableObject {
         // Default sort: Recent
         filteredDebriefs.sort { $0.occurredAt > $1.occurredAt }
     }
+    
+
     
     var stats: (today: Int, total: Int, totalMins: Int) {
         let totalCalls = debriefs.count

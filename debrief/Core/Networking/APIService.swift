@@ -36,13 +36,13 @@ class APIService {
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         struct ContactResponse: Decodable {
             let contactId: String
             let name: String
             let handle: String?
             let handleType: String?
-            let createdAt: String?
         }
         
         let responses = try decoder.decode([ContactResponse].self, from: data)
@@ -74,6 +74,7 @@ class APIService {
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         struct ContactResponse: Decodable {
             let contactId: String
@@ -93,7 +94,7 @@ class APIService {
     private struct DebriefAPIResponse: Decodable {
         let debriefId: String? // Changed to Optional to handle backend nulls
         let contactId: String?
-        let contactName: String?
+        // contactName removed per backend change
         let occurredAt: Date?
         let audioDurationSec: Int?
         let status: String?
@@ -114,10 +115,13 @@ class APIService {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
-        // Debug: Print JSON if needed, but let's trust the fix for now
+        if let jsonStr = String(data: data, encoding: .utf8) {
+            print("DEBUG API RAW JSON: \(jsonStr)")
+        }
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         let responses = try decoder.decode([DebriefAPIResponse].self, from: data)
         
@@ -133,7 +137,8 @@ class APIService {
             
             return Debrief(
                 id: resp.debriefId ?? UUID().uuidString, // Fallback to local ID
-                contactName: resp.contactName ?? "Unknown Contact",
+                contactId: resp.contactId ?? "", // Map contactId
+                contactName: "", // Name is resolved locally in ViewModel
                 occurredAt: resp.occurredAt ?? Date(),
                 duration: TimeInterval(resp.audioDurationSec ?? 0),
                 status: mappedStatus,
@@ -177,6 +182,7 @@ class APIService {
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)
         
@@ -192,7 +198,8 @@ class APIService {
             
         return Debrief(
             id: resp.debriefId ?? "" ,
-            contactName: resp.contactName ?? "",
+            contactId: resp.contactId ?? "",
+            contactName: "", // Name is resolved locally
             occurredAt: resp.occurredAt ?? Date(),
             duration: TimeInterval(resp.audioDurationSec ?? 0),
             status: mappedStatus,

@@ -102,6 +102,7 @@ struct DebriefsListView: View {
                                 NavigationLink(destination: DebriefDetailView(debrief: debrief)) {
                                     DebriefCard(debrief: debrief)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal)

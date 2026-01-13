@@ -123,9 +123,7 @@ struct RecordView: View {
                         .foregroundColor(Color(hex: "5EEAD4"))
                     TextField("", text: $viewModel.searchQuery, prompt: Text("Search contacts...").foregroundColor(.white.opacity(0.4)))
                         .foregroundColor(.white)
-                        .onChange(of: viewModel.searchQuery) { _ in
-                            viewModel.filterContacts()
-                        }
+                        .foregroundColor(.white)
                 }
                 .padding(12)
                 .background(.white.opacity(0.1))
@@ -135,53 +133,60 @@ struct RecordView: View {
             
             // List
             ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(viewModel.filteredContacts) { contact in
-                        Button {
-                            viewModel.selectContact(contact)
-                        } label: {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    ForEach(viewModel.groupedContacts, id: \.key) { section in
+                        Section(header: 
                             HStack {
-                                VStack(alignment: .leading) {
-                                    Text(contact.name)
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                    if let handle = contact.handle {
-                                        Text(handle)
-                                            .font(.subheadline)
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-                                }
+                                Text(section.key)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
                                 Spacer()
-                                if viewModel.selectedContact?.id == contact.id {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(Color(hex: "5EEAD4"))
-                                }
                             }
-                            .padding()
-                            .background(
-                                viewModel.selectedContact?.id == contact.id ?
-                                Color(hex: "2DD4BF").opacity(0.3) :
-                                    Color.white.opacity(0.1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .background(Color(hex: "064E3B").opacity(0.9)) // Dark header matching theme
+                        ) {
+                            ForEach(section.value) { contact in
+                                Button {
+                                    viewModel.selectContact(contact)
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading) {
+                                            Text(contact.name)
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                            if let handle = contact.handle {
+                                                Text(handle)
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.white.opacity(0.7))
+                                            }
+                                        }
+                                        Spacer()
+                                        if viewModel.selectedContact?.id == contact.id {
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(Color(hex: "5EEAD4"))
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        viewModel.selectedContact?.id == contact.id ?
+                                        Color(hex: "2DD4BF").opacity(0.3) :
+                                            Color.clear
+                                    )
+                                    .contentShape(Rectangle()) // Ensure tap target is full row
+                                }
+                                Divider()
+                                    .background(Color.white.opacity(0.1))
+                                    .padding(.leading, 16)
+                            }
                         }
                     }
                     
-                    Button {
-                        viewModel.isNewContactFormVisible = true
-                    } label: {
-                        Text("+ Create New Contact")
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundColor(.white.opacity(0.3)))
-                    }
-                    .padding(.top, 8)
                 }
-                .padding()
             }
+            .padding(.top, 16)
+            .padding(.horizontal, 16)
             
             // Save Button
             if viewModel.selectedContact != nil {
@@ -203,33 +208,6 @@ struct RecordView: View {
                 }
                 .padding()
             }
-        }
-        .sheet(isPresented: $viewModel.isNewContactFormVisible) {
-            // Simple New Contact Form
-            ZStack {
-                Color(hex: "115E59").ignoresSafeArea()
-                VStack(spacing: 20) {
-                    Text("New Contact")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                    
-                    TextField("Name", text: $viewModel.newContactName)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Company (Optional)", text: $viewModel.newContactHandle)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    HStack {
-                        Button("Cancel") { viewModel.isNewContactFormVisible = false }
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button("Create") { viewModel.createContact() }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color(hex: "14B8A6"))
-                    }
-                }
-                .padding()
-            }
-            .presentationDetents([.height(300)])
         }
     }
     
