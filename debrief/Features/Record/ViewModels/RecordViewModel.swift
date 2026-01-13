@@ -65,7 +65,7 @@ class RecordViewModel: ObservableObject {
         guard granted else { return }
         
         do {
-            try recorderService.startRecording()
+            try await recorderService.startRecording()
             state = .recording
             startTimer()
         } catch {

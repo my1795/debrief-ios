@@ -14,18 +14,24 @@ class HomeViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var filteredDebriefs: [Debrief] = []
     
+    private let apiService = APIService.shared
+    
     init() {
-        loadMockData()
+        Task {
+            await fetchDebriefs()
+        }
     }
     
-    func loadMockData() {
-        // Mock Data
-        self.debriefs = [
-            Debrief(id: "1", contactName: "Ahmet - TechCorp", occurredAt: Date(), duration: 1800, status: .ready, summary: "Discussed project roadmap and timeline for Q1.", transcript: nil, actionItems: ["Send proposal", "Update Jira"]),
-            Debrief(id: "2", contactName: "Sarah - Design", occurredAt: Date().addingTimeInterval(-86400), duration: 1200, status: .processing, summary: "Reviewing new UI mockups for the landing page.", transcript: nil, actionItems: []),
-            Debrief(id: "3", contactName: "Mehmet - Engineer", occurredAt: Date().addingTimeInterval(-172800), duration: 600, status: .draft, summary: nil, transcript: nil, actionItems: nil)
-        ]
-        filterDebriefs()
+    func fetchDebriefs() async {
+        do {
+            let fetchedDebriefs = try await apiService.getDebriefs()
+            await MainActor.run {
+                self.debriefs = fetchedDebriefs
+                self.filterDebriefs()
+            }
+        } catch {
+            print("Failed to fetch debriefs: \(error)")
+        }
     }
     
     func filterDebriefs() {

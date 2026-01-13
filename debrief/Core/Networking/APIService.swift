@@ -34,7 +34,6 @@ class APIService {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
-        // Map backend response matching `ContactResponse` schema
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         
@@ -42,11 +41,12 @@ class APIService {
             let contactId: String
             let name: String
             let handle: String?
-            // Ignoring other fields for now to map to domain model
+            let handleType: String?
+            let createdAt: String?
         }
         
         let responses = try decoder.decode([ContactResponse].self, from: data)
-        return responses.map { Contact(id: UUID().uuidString, name: $0.name, handle: $0.handle ?? "", totalDebriefs: 0) } // Adapting to local model
+        return responses.map { Contact(id: $0.contactId, name: $0.name, handle: $0.handle ?? "", totalDebriefs: 0) }
     }
     
     func createContact(name: String, handle: String) async throws -> Contact {
@@ -61,7 +61,7 @@ class APIService {
         let body: [String: Any] = [
             "name": name,
             "handle": handle,
-            "handleType": "GENERIC" // Defaulting for now
+            "handleType": "GENERIC" // Matching CreateContactRequest DTO
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -79,6 +79,7 @@ class APIService {
             let contactId: String
             let name: String
             let handle: String?
+            let handleType: String?
         }
         
         let resp = try decoder.decode(ContactResponse.self, from: data)
@@ -86,6 +87,62 @@ class APIService {
     }
     
     // MARK: - Debriefs
+    
+    // Shared DTO for Response (Internal)
+    // Shared DTO for Response (Internal)
+    private struct DebriefAPIResponse: Decodable {
+        let debriefId: String? // Changed to Optional to handle backend nulls
+        let contactId: String?
+        let contactName: String?
+        let occurredAt: Date?
+        let audioDurationSec: Int?
+        let status: String?
+        let summary: String?
+        let transcript: String?
+        let actionItems: [String]?
+        let createdAt: Date?
+    }
+    
+    func getDebriefs() async throws -> [Debrief] {
+        guard let url = URL(string: "\(baseURL)/debriefs") else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        // Debug: Print JSON if needed, but let's trust the fix for now
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        
+        let responses = try decoder.decode([DebriefAPIResponse].self, from: data)
+        
+        return responses.map { resp in
+            let mappedStatus: DebriefStatus = {
+                switch resp.status {
+                case "PROCESSING": return .processing
+                case "READY": return .ready
+                case "FAILED": return .failed
+                default: return .draft
+                }
+            }()
+            
+            return Debrief(
+                id: resp.debriefId ?? UUID().uuidString, // Fallback to local ID
+                contactName: resp.contactName ?? "Unknown Contact",
+                occurredAt: resp.occurredAt ?? Date(),
+                duration: TimeInterval(resp.audioDurationSec ?? 0),
+                status: mappedStatus,
+                summary: resp.summary,
+                transcript: resp.transcript,
+                actionItems: resp.actionItems
+            )
+        }
+    }
     
     func createDebrief(audioUrl: URL, contactId: String) async throws -> Debrief {
         guard let url = URL(string: "\(baseURL)/debriefs?contactId=\(contactId)") else {
@@ -118,20 +175,8 @@ class APIService {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
-        // Decode logic matching `DebriefResponse`
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        
-        struct DebriefAPIResponse: Decodable {
-            let debriefId: String
-            let contactName: String
-            let occurredAt: Date
-            let audioDurationSec: Int
-            let status: String
-            let summary: String?
-            let transcript: String?
-            let actionItems: [String]?
-        }
         
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)
         
@@ -146,10 +191,10 @@ class APIService {
         }()
             
         return Debrief(
-            id: resp.debriefId,
-            contactName: resp.contactName,
-            occurredAt: resp.occurredAt,
-            duration: TimeInterval(resp.audioDurationSec),
+            id: resp.debriefId ?? "" ,
+            contactName: resp.contactName ?? "",
+            occurredAt: resp.occurredAt ?? Date(),
+            duration: TimeInterval(resp.audioDurationSec ?? 0),
             status: mappedStatus,
             summary: resp.summary,
             transcript: resp.transcript,

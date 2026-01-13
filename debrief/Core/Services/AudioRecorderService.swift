@@ -10,7 +10,7 @@ import AVFoundation
 
 protocol AudioRecorderServiceProtocol {
     func requestPermission() async -> Bool
-    func startRecording() throws
+    func startRecording() async throws
     func stopRecording() -> URL?
     func cleanup(url: URL)
     var currentTime: TimeInterval { get }
@@ -27,10 +27,14 @@ class AudioRecorderService: NSObject, AudioRecorderServiceProtocol, AVAudioRecor
         }
     }
     
-    func startRecording() throws {
+    func startRecording() async throws {
+        // Perform session setup off-main-thread
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .default)
+        try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
         try audioSession.setActive(true)
+        
+        // This is safe to run on background but Recorder init must happen.
+        // We are in async context so this is better.
         
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
         
