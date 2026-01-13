@@ -6,7 +6,7 @@ import DebriefDetail from './DebriefDetail';
 import RecordScreen from './RecordScreen';
 import ContactsList from './ContactsList';
 import ContactDetail from './ContactDetail';
-import StatsScreen from './StatsScreen';
+import StatsScreenNew from './StatsScreenNew';
 import SettingsScreen from './SettingsScreen';
 
 interface ScreenshotScenario {
@@ -181,7 +181,7 @@ export default function ScreenshotMode() {
       id: 'stats',
       title: '13. Stats Screen',
       description: 'Statistics and quota usage',
-      component: <StatsScreen />
+      component: <StatsScreenNew />
     },
     {
       id: 'settings',

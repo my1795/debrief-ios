@@ -5,7 +5,7 @@ import DebriefDetail from './components/DebriefDetail';
 import RecordScreen from './components/RecordScreen';
 import ContactsList from './components/ContactsList';
 import ContactDetail from './components/ContactDetail';
-import StatsScreen from './components/StatsScreen';
+import StatsScreenNew from './components/StatsScreenNew';
 import SettingsScreen from './components/SettingsScreen';
 import SignInScreen from './components/SignInScreen';
 import ScreenshotMode from './components/ScreenshotMode';
@@ -65,7 +65,7 @@ export default function App() {
       case 'debrief-detail':
         return <DebriefDetail debriefId={selectedDebriefId} onBack={navigateBack} />;
       case 'stats':
-        return <StatsScreen />;
+        return <StatsScreenNew />;
       case 'record':
         return <RecordScreen onComplete={() => setCurrentScreen('debriefs')} />;
       case 'contacts':
