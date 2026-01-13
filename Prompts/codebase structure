@@ -1,0 +1,34 @@
+App/
+  DebriefApp.swift
+  AppRootView.swift
+  DI/
+    AppContainer.swift
+  Presentation/
+    TopViewControllerProvider.swift
+
+Core/
+  Auth/
+    AuthSession.swift
+    AuthServiceProtocol.swift
+    FirebaseGoogleAuthService.swift
+  Networking/
+    APIClient.swift
+    Endpoint.swift
+    AuthTokenProvider.swift
+  Models/
+    UserDTO.swift
+    DebriefDTO.swift
+  Utils/
+    Logger.swift
+
+Features/
+  Home/
+    HomeView.swift
+    HomeViewModel.swift
+    HomeServiceProtocol.swift
+    HomeService.swift
+  Debrief/
+    DebriefView.swift
+    DebriefViewModel.swift
+    DebriefServiceProtocol.swift
+    DebriefService.swift

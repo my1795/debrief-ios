@@ -1,0 +1,22 @@
+You are working inside an iOS SwiftUI app.
+
+Goal: Build a clean MVVM + Feature-based architecture with strict boundaries.
+Backend APIs are ready. We will call them using an APIClient that attaches a Firebase ID token.
+
+Non-negotiable rules:
+- Views contain zero business logic and never import FirebaseAuth or GoogleSignIn.
+- All Firebase/GoogleSignIn code lives in Core/Auth.
+- All network code lives in Core/Networking.
+- Each Feature has: View, ViewModel, ServiceProtocol, Service.
+- Dependency injection is done via App/DI/AppContainer and passed down from AppRootView.
+- Use async/await only. No Combine in services. Combine allowed only for @Published state in ViewModels.
+- Keep file sizes small. If a file grows, split it.
+
+Implement these steps:
+1) Create the folder structure exactly as listed.
+2) Create AuthSession (ObservableObject) that exposes:
+   - @Published user, isAuthenticated, isLoading, error
+   - signInWithGoogle(), signOut(), getIDToken()
+3) Create APIClient that calls my backend with Authorization: Bearer <firebase_id_token>.
+4) Create Home feature as a working example: fetch /me and render user email.
+5) Provide the exact Swift code for each new file and show which files to delete or replace.
