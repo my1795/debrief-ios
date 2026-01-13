@@ -55,7 +55,7 @@ class HomeViewModel: ObservableObject {
                          finalDebrief = Debrief(
                             id: debrief.id,
                             contactId: debrief.contactId,
-                            contactName: "Unknown Contact", // Or keep empty? User said "Deleted Contact" in example code
+                            contactName: "Deleted Contact", // Or keep empty? User said "Deleted Contact" in example code
                             occurredAt: debrief.occurredAt,
                             duration: debrief.duration,
                             status: debrief.status,
