@@ -208,4 +208,45 @@ class APIService {
             actionItems: resp.actionItems
         )
     }
+    func createDebrief(fileURL: URL, contactId: String?) async throws -> Debrief {
+        // ... implementation hidden
+        fatalError("Should use the existing implementation") 
+    }
+    
+    // MARK: - Stats
+    
+    func getStatsOverview() async throws -> OverviewResponse {
+        return try await performRequest(endpoint: "/stats/overview", method: "GET")
+    }
+    
+    // MARK: - Helpers
+    
+    private func performRequest<T: Decodable>(endpoint: String, method: String = "GET", body: Data? = nil, headers: [String: String] = [:]) async throws -> T {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add custom headers
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        
+        if let body = body {
+            request.httpBody = body
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
+        return try decoder.decode(T.self, from: data)
+    }
 }

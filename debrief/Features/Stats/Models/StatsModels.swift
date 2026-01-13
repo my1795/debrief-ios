@@ -9,24 +9,52 @@ import Foundation
 
 // MARK: - Domain Models
 
+// MARK: - API Response Models
+
+struct OverviewResponse: Decodable {
+    let allTimeStats: AllTimeStats
+    // Note: API returns top-level object wrapper.
+}
+
+struct AllTimeStats: Decodable {
+    let totalDebriefs: Int
+    let totalMinutes: Int
+    let totalWords: Int
+    let avgMinutesPerDay: Double?
+    let topContact: TopContactInfo?
+}
+
+struct TopContactInfo: Decodable {
+    let contactId: String? // Nullable in schema?
+    let name: String?
+    let debriefCount: Int
+    let totalMinutes: Int
+}
+
+// MARK: - Domain Models (Mapped from API)
+
 struct StatsOverview {
     let totalDebriefs: Int
     let totalMinutes: Int
-    let totalActionItems: Int
-    let totalContacts: Int
+    let totalActionItems: Int // Not in OverviewResponse, might need separate call or mock for now
+    let totalContacts: Int    // Not in OverviewResponse
     let avgDebriefDuration: Double
-    let completionRate: Int
-    let mostActiveDay: String
-    let longestStreak: Int
+    let completionRate: Int   // Mock for now
+    let mostActiveDay: String // Mock for now
+    let longestStreak: Int    // Mock for now
 }
 
 struct StatsTrends {
+    // API "TrendComparison" schema exists but is it in OverviewResponse?
+    // OverviewResponse doesn't show it. We might need to fetch separate trends or calculate.
+    // For now, keeping placeholders that will use 0 if not available.
     let debriefsChangePercent: Double
     let minutesChangePercent: Double
     let actionItemsChangePercent: Double
 }
 
 struct StatsQuota {
+    // Not found in OverviewResponse. Will keep as Mock/Placeholder until Quota API is defined.
     let tier: String
     let recordingsThisMonth: Int
     let recordingsLimit: Int
@@ -54,15 +82,15 @@ struct UsageEvent: Identifiable {
 // MARK: - Mock Data
 
 extension StatsOverview {
-    static let mock = StatsOverview(
-        totalDebriefs: 156,
-        totalMinutes: 892,
-        totalActionItems: 234,
-        totalContacts: 12,
-        avgDebriefDuration: 5.7,
-        completionRate: 87,
-        mostActiveDay: "Monday",
-        longestStreak: 7
+    static let empty = StatsOverview(
+        totalDebriefs: 0,
+        totalMinutes: 0,
+        totalActionItems: 0,
+        totalContacts: 0,
+        avgDebriefDuration: 0,
+        completionRate: 0,
+        mostActiveDay: "-",
+        longestStreak: 0
     )
 }
 
@@ -76,13 +104,13 @@ extension StatsTrends {
 
 extension StatsQuota {
     static let mock = StatsQuota(
-        tier: "Pro",
-        recordingsThisMonth: 42,
-        recordingsLimit: 100,
-        minutesThisMonth: 245,
-        minutesLimit: 500,
-        storageUsedMB: 1250,
-        storageLimitMB: 5000
+        tier: "Free",
+        recordingsThisMonth: 8,
+        recordingsLimit: 10,
+        minutesThisMonth: 42,
+        minutesLimit: 100,
+        storageUsedMB: 125,
+        storageLimitMB: 500
     )
 }
 

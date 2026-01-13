@@ -15,6 +15,7 @@ protocol ContactStoreServiceProtocol {
 }
 
 class ContactStoreService: ContactStoreServiceProtocol {
+    static let shared = ContactStoreService()
     private let store = CNContactStore()
     
     func requestAccess() async -> Bool {

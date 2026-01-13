@@ -101,5 +101,8 @@ struct StatsView: View {
                 }
             }
         }
+        .task {
+            await viewModel.loadData()
+        }
     }
 }

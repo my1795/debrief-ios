@@ -15,25 +15,27 @@ struct StatsOverviewView: View {
             // MARK: - Current Plan Card
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: "rosette")
+                    Image(systemName: "sparkles")
                         .font(.title3)
+                        .foregroundStyle(.white)
                     Text("Current Plan")
                         .font(.headline)
+                        .foregroundStyle(.white)
                 }
                 
                 Text(viewModel.quota.tier)
                     .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(.white)
                 
-                Text("All features unlocked")
+                Text("Limited access")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.9))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(20)
-            .foregroundStyle(.white)
             .background(
                 LinearGradient(
-                    colors: [Color(hex: "14B8A6"), Color(hex: "10B981")], // teal-500 to emerald-500
+                    colors: [Color(hex: "0891B2"), Color(hex: "06B6D4")], // cyan-600 to cyan-500 (Free/Starter look)
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -47,28 +49,32 @@ struct StatsOverviewView: View {
                     title: "Total Debriefs",
                     value: "\(viewModel.overview.totalDebriefs)",
                     icon: "mic.fill",
-                    trend: viewModel.trends.debriefsChangePercent
+                    trend: viewModel.trends.debriefsChangePercent,
+                    infoText: "Debriefs created this month vs last month"
                 )
                 
                 MetricCard(
                     title: "Total Minutes",
                     value: "\(viewModel.overview.totalMinutes)",
                     icon: "clock.fill",
-                    trend: viewModel.trends.minutesChangePercent
+                    trend: viewModel.trends.minutesChangePercent,
+                    infoText: "Total recording time vs last month"
                 )
                 
                 MetricCard(
                     title: "Action Items",
                     value: "\(viewModel.overview.totalActionItems)",
                     icon: "checklist",
-                    trend: viewModel.trends.actionItemsChangePercent
+                    trend: viewModel.trends.actionItemsChangePercent,
+                    infoText: "Action items generated vs last month"
                 )
                 
                 MetricCard(
                     title: "Contacts",
                     value: "\(viewModel.overview.totalContacts)",
                     icon: "person.2.fill",
-                    detail: "Active contacts"
+                    detail: "Active contacts",
+                    infoText: "Contacts with at least one debrief"
                 )
             }
             
@@ -202,6 +208,8 @@ struct MetricCard: View {
     let icon: String
     var trend: Double? = nil
     var detail: String? = nil
+    @State private var showInfo = false
+    var infoText: String? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -211,6 +219,17 @@ struct MetricCard: View {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
+                
+                if let info = infoText {
+                    Button(action: { showInfo.toggle() }) {
+                        Image(systemName: "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .alert(isPresented: $showInfo) {
+                        Alert(title: Text(title), message: Text(info), dismissButton: .default(Text("OK")))
+                    }
+                }
             }
             
             Text(value)
