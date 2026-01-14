@@ -25,6 +25,7 @@ struct Debrief: Identifiable, Codable {
     let summary: String?
     let transcript: String?
     let actionItems: [String]?
+    let audioUrl: String? // Added to support remote playback
     
     // For mock data convenience
     var debriefId: String { id }

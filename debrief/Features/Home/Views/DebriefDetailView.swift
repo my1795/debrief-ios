@@ -8,10 +8,13 @@
 import SwiftUI
 
 struct DebriefDetailView: View {
-    let debrief: Debrief
     @Environment(\.dismiss) var dismiss
-    @State private var isPlaying = false
+    @StateObject private var viewModel: DebriefDetailViewModel
     @State private var showDeleteConfirm = false
+    
+    init(debrief: Debrief) {
+        _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief))
+    }
     
     var body: some View {
         ZStack {
@@ -29,246 +32,269 @@ struct DebriefDetailView: View {
             
             VStack(spacing: 0) {
                 // Header
-                HStack(spacing: 12) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(.white.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                    Text(debrief.contactName)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    StatusBadge(status: debrief.status)
-                }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                
-                // Meta Info
-                HStack(spacing: 16) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                        Text(debrief.occurredAt.formatted(date: .long, time: .shortened))
-                    }
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                        Text("\(Int(debrief.duration / 60)) min")
-                    }
-                }
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.7))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 60) // Align with title text roughly
-                .padding(.bottom, 16)
+                headerView
                 
                 // Content
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 20) {
                         
-                        // Failed State
-                        if debrief.status == .failed {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Processing Failed")
-                                    .font(.headline)
-                                    .foregroundColor(Color(hex: "FEE2E2")) // red-100
-                                Text("We encountered an error while processing this debrief. Please try again.")
-                                    .font(.subheadline)
-                                    .foregroundColor(Color(hex: "FECACA")) // red-200
-                                
-                                Button {
-                                    // Retry action
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "arrow.clockwise")
-                                        Text("Retry Processing")
-                                    }
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(.red)
-                                    .foregroundColor(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                .padding(.top, 4)
-                            }
-                            .padding()
-                            .background(Color.red.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.3)))
+                        // Status/Error States
+                        if viewModel.debrief.status == .failed {
+                            statusCard(title: "Processing Failed", message: "We encountered an error while processing this debrief.", color: Color.red)
+                        } else if viewModel.debrief.status == .processing {
+                            statusCard(title: "Processing Audio...", message: "This usually takes a few minutes.", color: Color.yellow)
                         }
                         
-                        // Processing State
-                        if debrief.status == .processing {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Processing Audio...")
-                                    .font(.headline)
-                                    .foregroundColor(Color(hex: "FEF9C3")) // yellow-100
-                                Text("Your debrief is being processed. This usually takes a few minutes.")
-                                    .font(.subheadline)
-                                    .foregroundColor(Color(hex: "FEF08A")) // yellow-200
-                            }
-                            .padding()
-                            .background(Color.yellow.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.yellow.opacity(0.3)))
+                        // 1. Action Items
+                        actionItemsSection
+                        
+                        // 2. Summary
+                        if let summary = viewModel.debrief.summary {
+                            detailSection(title: "Summary", content: summary)
                         }
                         
-                        // Summary
-                        if let summary = debrief.summary {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Summary")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text(summary)
-                                    .font(.body)
-                                    .foregroundColor(.white.opacity(0.9))
-                                    .lineSpacing(4)
-                            }
-                            .padding()
-                            .background(.white.opacity(0.1))
-                            .background(Material.ultraThin)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2)))
+                        // 3. Transcript
+                        if let transcript = viewModel.debrief.transcript, !transcript.isEmpty {
+                            detailSection(title: "Transcript", content: transcript, font: .caption)
                         }
                         
-                        // Action Items
-                        if let items = debrief.actionItems, !items.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Action Items")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(items, id: \.self) { item in
-                                        HStack(alignment: .top, spacing: 12) {
-                                            Text("•")
-                                                .font(.headline)
-                                                .foregroundColor(Color(hex: "5EEAD4")) // teal-300
-                                            Text(item)
-                                                .foregroundColor(.white.opacity(0.9))
-                                        }
-                                    }
-                                }
-                            }
-                            .padding()
-                            .background(.white.opacity(0.1))
-                            .background(Material.ultraThin)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2)))
-                        }
+                        // 4. Audio Player
+                        audioPlayerSection
                         
-                        // Audio Player Placeholder
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Audio Recording")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            
-                            HStack(spacing: 12) {
-                                Button {
-                                    isPlaying.toggle()
-                                } label: {
-                                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.white)
-                                        .frame(width: 44, height: 44)
-                                        .background(Color(hex: "14B8A6")) // teal-500
-                                        .clipShape(Circle())
-                                }
-                                
-                                VStack(spacing: 4) {
-                                    Capsule()
-                                        .fill(.white.opacity(0.2))
-                                        .frame(height: 8)
-                                        .overlay(
-                                            GeometryReader { geo in
-                                                Capsule()
-                                                    .fill(Color(hex: "2DD4BF")) // teal-400
-                                                    .frame(width: geo.size.width * 0.33)
-                                            }
-                                        )
-                                    
-                                    HStack {
-                                        Text("1:23")
-                                        Spacer()
-                                        Text("\(Int(debrief.duration / 60)) min")
-                                    }
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(.white.opacity(0.1))
-                        .background(Material.ultraThin)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2)))
-                        
-                        // Actions buttons
-                        HStack(spacing: 12) {
-                            Button {
-                                // Export
-                            } label: {
-                                HBase {
-                                    Image(systemName: "square.and.arrow.up")
-                                    Text("Export")
-                                }
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color(hex: "14B8A6")) // teal-500
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                            
-                            Button {
-                                showDeleteConfirm = true
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.headline)
-                                    .foregroundColor(Color(hex: "FECACA")) // red-200
-                                    .padding()
-                                    .background(Color.red.opacity(0.2))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.3)))
-                            }
-                        }
-                        .padding(.bottom, 32)
+                        // Actions
+                        actionButtons
                         
                     }
-                    .padding(.horizontal)
+                    .padding()
+                    .padding(.bottom, 40)
                 }
+            }
+            
+            // Loading Overlay
+            if viewModel.isDeleting {
+                Color.black.opacity(0.5).ignoresSafeArea()
+                ProgressView()
+                    .tint(.white)
             }
         }
         .navigationBarHidden(true)
         .alert("Delete Debrief?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
-                dismiss() // Logic would go here
+                viewModel.deleteDebrief {
+                    dismiss()
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This action cannot be undone. The debrief and its audio will be permanently deleted.")
+            Text("This action cannot be undone.")
+        }
+    }
+    
+    // MARK: - Subviews
+    
+    private var headerView: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Button { dismiss() } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(.white.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                
+                Text(viewModel.debrief.contactName)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                StatusBadge(status: viewModel.debrief.status)
+            }
+            
+            HStack(spacing: 16) {
+                Label(viewModel.debrief.occurredAt.formatted(date: .long, time: .shortened), systemImage: "calendar")
+                Label("\(Int(viewModel.debrief.duration / 60)) min", systemImage: "clock")
+            }
+            .font(.caption)
+            .foregroundColor(.white.opacity(0.7))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 4)
+        }
+        .padding(.horizontal)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+    
+    private func statusCard(title: String, message: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(color.opacity(0.9))
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(color.opacity(0.7))
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.3)))
+    }
+    
+    private var actionItemsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Action Items")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Button {
+                    // Logic to add reminder
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color(hex: "5EEAD4"))
+                        .padding(6)
+                        .background(Color(hex: "5EEAD4").opacity(0.1))
+                        .clipShape(Circle())
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                if let items = viewModel.debrief.actionItems, !items.isEmpty {
+                    ForEach(items, id: \.self) { item in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "circle")
+                                .foregroundStyle(Color(hex: "5EEAD4"))
+                                .padding(.top, 2)
+                            Text(item)
+                                .foregroundColor(.white.opacity(0.9))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "checklist")
+                            .font(.largeTitle)
+                            .foregroundStyle(.white.opacity(0.2))
+                        Text("No action items found")
+                            .font(.callout)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+            }
+        }
+        .padding()
+        .background(.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+    }
+    
+    private func detailSection(title: String, content: String, font: Font = .body) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Text(content)
+                .font(font)
+                .foregroundColor(.white.opacity(0.85))
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+    }
+    
+    private var audioPlayerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Audio Recording")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            if let _ = viewModel.debrief.audioUrl {
+                HStack(spacing: 16) {
+                    Button {
+                        viewModel.toggleAudio()
+                    } label: {
+                        Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 48))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(Color(hex: "2DD4BF"), .white) // teal-400, white
+                    }
+                    
+                    VStack(spacing: 6) {
+                        // Fake Waveform
+                        HStack(spacing: 3) {
+                            ForEach(0..<25) { _ in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color(hex: "5EEAD4").opacity(viewModel.isPlaying ? 0.8 : 0.3))
+                                    .frame(height: .random(in: 10...30))
+                            }
+                        }
+                        .frame(height: 32)
+                        
+                        HStack {
+                            Text(viewModel.isPlaying ? "Playing..." : "00:00")
+                            Spacer()
+                            Text(viewModel.formatDuration(viewModel.debrief.duration))
+                        }
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.6))
+                    }
+                }
+            } else {
+                HStack {
+                    Image(systemName: "mic.slash")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.3))
+                    Text("Audio recording unavailable")
+                        .font(.callout)
+                        .italic()
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            }
+        }
+        .padding()
+        .background(.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+    }
+    
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            ShareLink(item: viewModel.shareableText) {
+                Label("Export", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(hex: "0F766E")) // teal-700
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                Image(systemName: "trash")
+                    .font(.headline)
+                    .foregroundColor(Color(hex: "FECACA"))
+                    .frame(width: 50)
+                    .padding()
+                    .background(Color.red.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
     }
 }
 
-// Helper for convenient HStack styling
-struct HBase<Content: View>: View {
-    @ViewBuilder var content: Content
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            content
-        }
-    }
-}

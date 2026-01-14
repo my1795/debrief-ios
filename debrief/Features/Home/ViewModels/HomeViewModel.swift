@@ -47,7 +47,8 @@ class HomeViewModel: ObservableObject {
                             status: debrief.status,
                             summary: debrief.summary,
                             transcript: debrief.transcript,
-                            actionItems: debrief.actionItems
+                            actionItems: debrief.actionItems,
+                            audioUrl: debrief.audioUrl
                         )
                     } else {
                          // Fallback if ID not found in device (e.g. deleted contact)
@@ -61,7 +62,8 @@ class HomeViewModel: ObservableObject {
                             status: debrief.status,
                             summary: debrief.summary,
                             transcript: debrief.transcript,
-                            actionItems: debrief.actionItems
+                            actionItems: debrief.actionItems,
+                            audioUrl: debrief.audioUrl
                         )
                     }
                 } else {
@@ -75,7 +77,8 @@ class HomeViewModel: ObservableObject {
                         status: debrief.status,
                         summary: debrief.summary,
                         transcript: debrief.transcript,
-                        actionItems: debrief.actionItems
+                        actionItems: debrief.actionItems,
+                        audioUrl: debrief.audioUrl
                     )
                 }
                 resolvedDebriefs.append(finalDebrief)

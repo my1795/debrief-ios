@@ -1,0 +1,1577 @@
+{
+  "paths": {
+    "/v1/debriefs": {
+      "get": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Get debriefs",
+        "description": "Get debriefs for the authenticated user. Optionally filter by contactId.",
+        "operationId": "getDebriefs",
+        "parameters": [
+          {
+            "name": "contactId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Debriefs retrieved",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DebriefResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Create and process a debrief",
+        "description": "Upload audio file, transcribe, generate summary and extract action items",
+        "operationId": "createDebrief",
+        "parameters": [
+          {
+            "name": "contactId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "audio"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Debrief created and processed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebriefResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/debriefs/{debriefId}/upload-url": {
+      "post": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Get presigned upload URL",
+        "description": "Get a presigned URL for uploading the audio file to Firebase Storage",
+        "operationId": "getUploadUrl",
+        "parameters": [
+          {
+            "name": "debriefId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Debrief not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Upload URL generated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/debriefs/{debriefId}/process": {
+      "post": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Process debrief audio",
+        "description": "Transcribe audio, generate summary, and extract action items using AI",
+        "operationId": "processDebrief",
+        "parameters": [
+          {
+            "name": "debriefId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Debrief or audio not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Processing completed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebriefResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/debriefs/{debriefId}/confirm-upload": {
+      "post": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Confirm audio upload",
+        "description": "Confirm that the audio file has been uploaded successfully",
+        "operationId": "confirmUpload",
+        "parameters": [
+          {
+            "name": "debriefId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Debrief not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Upload confirmed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebriefResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/debriefs/{debriefId}": {
+      "get": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Get a debrief",
+        "description": "Get a specific debrief by ID",
+        "operationId": "getDebrief",
+        "parameters": [
+          {
+            "name": "debriefId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Debrief not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Debrief retrieved",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebriefResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Debriefs"
+        ],
+        "summary": "Delete a debrief",
+        "description": "Delete a debrief and its associated audio file",
+        "operationId": "deleteDebrief",
+        "parameters": [
+          {
+            "name": "debriefId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Debrief deleted"
+          },
+          "404": {
+            "description": "Debrief not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Standard error response",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            },
+            "description": "Additional error details"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "DebriefResponse": {
+        "type": "object",
+        "description": "Debrief response",
+        "properties": {
+          "debriefId": {
+            "type": "string",
+            "description": "Debrief ID"
+          },
+          "contactId": {
+            "type": "string",
+            "description": "Contact ID"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the debrief occurred"
+          },
+          "audioDurationSec": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Audio duration in seconds"
+          },
+          "audioUrl": {
+            "type": "string",
+            "description": "Audio file URL (signed, temporary)"
+          },
+          "transcript": {
+            "type": "string",
+            "description": "Transcript of the debrief"
+          },
+          "summary": {
+            "type": "string",
+            "description": "AI-generated summary"
+          },
+          "actionItems": {
+            "type": "array",
+            "description": "AI-generated action items",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "Current status",
+            "enum": [
+              "DRAFT",
+              "UPLOADED",
+              "PROCESSING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the debrief was created"
+          }
+        },
+        "required": [
+          "actionItems",
+          "audioDurationSec",
+          "contactId",
+          "createdAt",
+          "debriefId",
+          "occurredAt",
+          "status"
+        ]
+      },
+      "UploadUrlResponse": {
+        "type": "object",
+        "description": "Presigned URL for audio upload",
+        "properties": {
+          "uploadUrl": {
+            "type": "string",
+            "description": "Presigned PUT URL for uploading audio"
+          },
+          "objectKey": {
+            "type": "string",
+            "description": "Object key in S3"
+          }
+        },
+        "required": [
+          "objectKey",
+          "uploadUrl"
+        ]
+      },
+      "CreateContactRequest": {
+        "type": "object",
+        "description": "Request to create a new contact",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name of the contact",
+            "example": "John Doe",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "handle": {
+            "type": "string",
+            "description": "Contact handle (phone number, email, meeting ID, etc.)",
+            "example": "+14155551234",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "handleType": {
+            "type": "string",
+            "description": "Type of handle",
+            "enum": [
+              "PHONE",
+              "EMAIL",
+              "GENERIC"
+            ],
+            "example": "PHONE"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ContactResponse": {
+        "type": "object",
+        "description": "Contact response",
+        "properties": {
+          "contactId": {
+            "type": "string",
+            "description": "Contact ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name"
+          },
+          "handle": {
+            "type": "string",
+            "description": "Contact handle (phone, email, etc.)"
+          },
+          "handleType": {
+            "type": "string",
+            "description": "Type of handle",
+            "enum": [
+              "PHONE",
+              "EMAIL",
+              "GENERIC"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact was created"
+          }
+        },
+        "required": [
+          "contactId",
+          "createdAt",
+          "name"
+        ]
+      },
+      "UsageSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "DAILY",
+              "WEEKLY",
+              "MONTHLY"
+            ]
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordings": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalRecordingMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalRecordingSec": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "transcriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wordCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "aiSummaries": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "exports": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "aiSummaries",
+          "exports",
+          "period",
+          "periodEnd",
+          "periodStart",
+          "recordings",
+          "totalRecordingMinutes",
+          "totalRecordingSec",
+          "transcriptions",
+          "wordCount"
+        ]
+      },
+      "QuotaLimits": {
+        "type": "object",
+        "properties": {
+          "recordingMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transcriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aiSummaries": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "aiSummaries",
+          "recordingMinutes",
+          "transcriptions"
+        ]
+      },
+      "QuotaPercent": {
+        "type": "object",
+        "properties": {
+          "recordingMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transcriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aiSummaries": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "aiSummaries",
+          "recordingMinutes",
+          "transcriptions"
+        ]
+      },
+      "QuotaRemaining": {
+        "type": "object",
+        "properties": {
+          "recordingMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transcriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aiSummaries": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "aiSummaries",
+          "recordingMinutes",
+          "transcriptions"
+        ]
+      },
+      "QuotaUsage": {
+        "type": "object",
+        "properties": {
+          "recordingMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transcriptions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aiSummaries": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "aiSummaries",
+          "recordingMinutes",
+          "transcriptions"
+        ]
+      },
+      "UserQuotaResponse": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "BASIC",
+              "PRO",
+              "ENTERPRISE"
+            ]
+          },
+          "limits": {
+            "$ref": "#/components/schemas/QuotaLimits"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/QuotaUsage"
+          },
+          "remaining": {
+            "$ref": "#/components/schemas/QuotaRemaining"
+          },
+          "percentUsed": {
+            "$ref": "#/components/schemas/QuotaPercent"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "limits",
+          "percentUsed",
+          "periodEnd",
+          "periodStart",
+          "remaining",
+          "tier",
+          "usage"
+        ]
+      },
+      "QuotaCheckResponse": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed"
+        ]
+      },
+      "AllTimeStats": {
+        "type": "object",
+        "properties": {
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalDebriefs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalWords": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalContacts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "avgMinutesPerDebrief": {
+            "type": "number",
+            "format": "double"
+          },
+          "memberSince": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "avgMinutesPerDebrief",
+          "memberSince",
+          "totalContacts",
+          "totalDebriefs",
+          "totalMinutes",
+          "totalWords"
+        ]
+      },
+      "ContactStatsResponse": {
+        "type": "object",
+        "properties": {
+          "contactId": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "totalDebriefs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalWords": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "avgMinutesPerDebrief": {
+            "type": "number",
+            "format": "double"
+          },
+          "avgWordsPerDebrief": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastInteractionAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstInteractionAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "weeklyAvgMinutes": {
+            "type": "number",
+            "format": "double"
+          },
+          "trend": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN",
+              "STABLE"
+            ]
+          },
+          "percentageOfTotal": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "avgMinutesPerDebrief",
+          "avgWordsPerDebrief",
+          "contactId",
+          "percentageOfTotal",
+          "totalDebriefs",
+          "totalMinutes",
+          "totalWords",
+          "trend",
+          "weeklyAvgMinutes"
+        ]
+      },
+      "OverviewResponse": {
+        "type": "object",
+        "properties": {
+          "allTimeStats": {
+            "$ref": "#/components/schemas/AllTimeStats"
+          },
+          "topContacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContactStatsResponse"
+            }
+          },
+          "recentTrend": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN",
+              "STABLE"
+            ]
+          },
+          "productivity": {
+            "$ref": "#/components/schemas/ProductivityMetrics"
+          }
+        },
+        "required": [
+          "allTimeStats",
+          "productivity",
+          "recentTrend",
+          "topContacts"
+        ]
+      },
+      "ProductivityMetrics": {
+        "type": "object",
+        "properties": {
+          "avgDebriefsPerWeek": {
+            "type": "number",
+            "format": "double"
+          },
+          "avgMinutesPerWeek": {
+            "type": "number",
+            "format": "double"
+          },
+          "mostActiveDay": {
+            "type": "string"
+          },
+          "mostActiveHour": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "actionItemCompletionRate": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "actionItemCompletionRate",
+          "avgDebriefsPerWeek",
+          "avgMinutesPerWeek"
+        ]
+      },
+      "Achievement": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "FIRST_DEBRIEF",
+              "STREAK_7_DAYS",
+              "STREAK_30_DAYS",
+              "TOTAL_HOURS_10",
+              "TOTAL_HOURS_50",
+              "CONTACTS_10",
+              "WORDS_10K",
+              "WORDS_100K"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "unlockedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "progress": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "icon": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "icon",
+          "progress",
+          "title",
+          "type"
+        ]
+      },
+      "InsightPattern": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PEAK_USAGE_TIME",
+              "TOP_CONTACT",
+              "WORD_COUNT_TREND",
+              "ACTIVITY_PATTERN",
+              "CONSISTENCY"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "description",
+          "title",
+          "type"
+        ]
+      },
+      "InsightSuggestion": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "FOLLOW_UP",
+              "REVIEW_NOTES",
+              "CONTACT_REMINDER",
+              "QUOTA_WARNING",
+              "PRODUCTIVITY_TIP"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "actionUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "priority",
+          "title",
+          "type"
+        ]
+      },
+      "InsightsResponse": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsightPattern"
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsightSuggestion"
+            }
+          },
+          "weeklyComparison": {
+            "$ref": "#/components/schemas/WeeklyComparison"
+          },
+          "achievements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Achievement"
+            }
+          }
+        },
+        "required": [
+          "achievements",
+          "generatedAt",
+          "patterns",
+          "suggestions",
+          "weeklyComparison"
+        ]
+      },
+      "WeeklyComparison": {
+        "type": "object",
+        "properties": {
+          "minutesChange": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minutesChangePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "debriefsChange": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "trend": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN",
+              "STABLE"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "debriefsChange",
+          "message",
+          "minutesChange",
+          "minutesChangePercent",
+          "trend"
+        ]
+      },
+      "UsageEventResponse": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "RECORDING_CREATED",
+              "TRANSCRIPTION_COMPLETED",
+              "AI_SUMMARY_GENERATED",
+              "DEBRIEF_EXPORTED"
+            ]
+          },
+          "debriefId": {
+            "type": "string"
+          },
+          "durationSec": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wordCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "durationSec",
+          "eventId",
+          "eventType",
+          "timestamp",
+          "wordCount"
+        ]
+      },
+      "DashboardStatsResponse": {
+        "type": "object",
+        "properties": {
+          "quota": {
+            "$ref": "#/components/schemas/UserQuotaResponse"
+          },
+          "thisWeek": {
+            "$ref": "#/components/schemas/UsageSummaryResponse"
+          },
+          "thisMonth": {
+            "$ref": "#/components/schemas/UsageSummaryResponse"
+          },
+          "recentActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageEventResponse"
+            }
+          }
+        },
+        "required": [
+          "quota",
+          "recentActivity",
+          "thisMonth",
+          "thisWeek"
+        ]
+      },
+      "PeriodSummary": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalDebriefs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalWords": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "avgMinutesPerDay": {
+            "type": "number",
+            "format": "double"
+          },
+          "topContact": {
+            "$ref": "#/components/schemas/TopContactInfo"
+          }
+        },
+        "required": [
+          "avgMinutesPerDay",
+          "endDate",
+          "startDate",
+          "totalDebriefs",
+          "totalMinutes",
+          "totalWords"
+        ]
+      },
+      "TopContactInfo": {
+        "type": "object",
+        "properties": {
+          "contactId": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "contactId",
+          "minutes"
+        ]
+      },
+      "TrendComparison": {
+        "type": "object",
+        "properties": {
+          "minutesChange": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minutesChangePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "debriefsChange": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "debriefsChangePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "wordsChange": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trend": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN",
+              "STABLE"
+            ]
+          }
+        },
+        "required": [
+          "debriefsChange",
+          "debriefsChangePercent",
+          "minutesChange",
+          "minutesChangePercent",
+          "trend",
+          "wordsChange"
+        ]
+      },
+      "TrendsData": {
+        "type": "object",
+        "properties": {
+          "currentPeriod": {
+            "$ref": "#/components/schemas/PeriodSummary"
+          },
+          "previousPeriod": {
+            "$ref": "#/components/schemas/PeriodSummary"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/TrendComparison"
+          }
+        },
+        "required": [
+          "comparison",
+          "currentPeriod",
+          "previousPeriod"
+        ]
+      },
+      "TimelineChartData": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "DAILY",
+              "WEEKLY",
+              "MONTHLY"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "dataPoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineDataPoint"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/TimelineTotals"
+          }
+        },
+        "required": [
+          "dataPoints",
+          "endDate",
+          "period",
+          "startDate",
+          "totals"
+        ]
+      },
+      "TimelineDataPoint": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "debriefs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "words": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contacts": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "contacts",
+          "date",
+          "debriefs",
+          "minutes",
+          "words"
+        ]
+      },
+      "TimelineTotals": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "debriefs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "words": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uniqueContacts": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "debriefs",
+          "minutes",
+          "uniqueContacts",
+          "words"
+        ]
+      },
+      "HeatmapCell": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "dayOfWeek": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weekIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intensity": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "count",
+          "date",
+          "dayOfWeek",
+          "intensity",
+          "minutes",
+          "weekIndex"
+        ]
+      },
+      "HeatmapData": {
+        "type": "object",
+        "properties": {
+          "weeks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeatmapCell"
+            }
+          },
+          "legend": {
+            "$ref": "#/components/schemas/HeatmapLegend"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/HeatmapStats"
+          }
+        },
+        "required": [
+          "data",
+          "endDate",
+          "legend",
+          "startDate",
+          "stats",
+          "weeks"
+        ]
+      },
+      "HeatmapLegend": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "required": [
+          "levels",
+          "max",
+          "min"
+        ]
+      },
+      "HeatmapStats": {
+        "type": "object",
+        "properties": {
+          "totalDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "longestStreak": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currentStreak": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "activeDays",
+          "currentStreak",
+          "longestStreak",
+          "totalDays"
+        ]
+      },
+      "ChartSegment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "percentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "color": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "color",
+          "id",
+          "label",
+          "percentage",
+          "value"
+        ]
+      },
+      "DistributionChartData": {
+        "type": "object",
+        "properties": {
+          "groupBy": {
+            "type": "string"
+          },
+          "totalValue": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartSegment"
+            }
+          }
+        },
+        "required": [
+          "groupBy",
+          "segments",
+          "totalValue"
+        ]
+      },
+      "TimelineItem": {
+        "type": "object",
+        "description": "A debrief timeline item",
+        "properties": {
+          "debriefId": {
+            "type": "string",
+            "description": "Debrief ID"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the debrief occurred"
+          },
+          "audioDurationSec": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Audio duration in seconds"
+          },
+          "status": {
+            "type": "string",
+            "description": "Debrief status",
+            "enum": [
+              "DRAFT",
+              "UPLOADED",
+              "PROCESSING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "AI-generated summary"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the debrief was created"
+          }
+        },
+        "required": [
+          "audioDurationSec",
+          "createdAt",
+          "debriefId",
+          "occurredAt",
+          "status"
+        ]
+      },
+      "TimelineResponse": {
+        "type": "object",
+        "description": "Timeline of debriefs for a contact",
+        "properties": {
+          "contactId": {
+            "type": "string",
+            "description": "Contact ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Contact name"
+          },
+          "debriefs": {
+            "type": "array",
+            "description": "Debriefs for this contact",
+            "items": {
+              "$ref": "#/components/schemas/TimelineItem"
+            }
+          }
+        },
+        "required": [
+          "contactId",
+          "debriefs",
+          "name"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "description": "Internal JWT token obtained from /v1/auth/exchange",
+        "name": "bearerAuth",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

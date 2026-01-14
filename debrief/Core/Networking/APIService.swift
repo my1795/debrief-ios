@@ -92,9 +92,8 @@ class APIService {
     // Shared DTO for Response (Internal)
     // Shared DTO for Response (Internal)
     private struct DebriefAPIResponse: Decodable {
-        let debriefId: String? // Changed to Optional to handle backend nulls
+        let debriefId: String?
         let contactId: String?
-        // contactName removed per backend change
         let occurredAt: Date?
         let audioDurationSec: Int?
         let status: String?
@@ -102,6 +101,7 @@ class APIService {
         let transcript: String?
         let actionItems: [String]?
         let createdAt: Date?
+        let audioUrl: String?
     }
     
     func getDebriefs(contactId: String? = nil) async throws -> [Debrief] {
@@ -119,8 +119,6 @@ class APIService {
         guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
-        
-        // ... (rest of decoder logic is same, just need to close the function)
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -147,7 +145,8 @@ class APIService {
                 status: mappedStatus,
                 summary: resp.summary,
                 transcript: resp.transcript,
-                actionItems: resp.actionItems
+                actionItems: resp.actionItems,
+                audioUrl: resp.audioUrl
             )
         }
     }
@@ -208,7 +207,8 @@ class APIService {
             status: mappedStatus,
             summary: resp.summary,
             transcript: resp.transcript,
-            actionItems: resp.actionItems
+            actionItems: resp.actionItems,
+            audioUrl: resp.audioUrl
         )
     }
     func createDebrief(fileURL: URL, contactId: String?) async throws -> Debrief {
@@ -220,6 +220,26 @@ class APIService {
     
     func getStatsOverview() async throws -> OverviewResponse {
         return try await performRequest(endpoint: "/stats/overview", method: "GET")
+    }
+    
+    // MARK: - Management
+    
+    func deleteDebrief(id: String) async throws {
+        // According to REST standards, DELETE should return 204 No Content usually.
+        // We use performRequest but expect Void/Empty response.
+        
+        guard let url = URL(string: "\(baseURL)/debriefs/\(id)") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
     }
     
     // MARK: - Helpers
