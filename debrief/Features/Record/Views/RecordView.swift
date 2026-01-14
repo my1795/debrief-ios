@@ -16,9 +16,9 @@ struct RecordView: View {
             // Background Gradient
             LinearGradient(
                 colors: [
-                    Color(hex: "134E4A"), // teal-900
-                    Color(hex: "115E59"), // teal-800
-                    Color(hex: "064E3B")  // emerald-900
+                    AppTheme.Colors.backgroundStart,
+                    AppTheme.Colors.backgroundMiddle,
+                    AppTheme.Colors.backgroundEnd
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -109,7 +109,7 @@ struct RecordView: View {
                         .foregroundColor(.white.opacity(0.7))
                     Text(formatTime(Int(viewModel.recordingTime)))
                         .fontWeight(.semibold)
-                        .foregroundColor(Color(hex: "5EEAD4")) // teal-300
+                        .foregroundColor(AppTheme.Colors.accent) // teal-300
                 }
                 .font(.subheadline)
                 
@@ -120,7 +120,7 @@ struct RecordView: View {
                 // Search
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(Color(hex: "5EEAD4"))
+                        .foregroundColor(AppTheme.Colors.accent)
                     TextField("", text: $viewModel.searchQuery, prompt: Text("Search contacts...").foregroundColor(.white.opacity(0.4)))
                         .foregroundColor(.white)
                         .foregroundColor(.white)
@@ -144,7 +144,7 @@ struct RecordView: View {
                                     .padding(.vertical, 8)
                                 Spacer()
                             }
-                            .background(Color(hex: "064E3B").opacity(0.9)) // Dark header matching theme
+                            .background(AppTheme.Colors.listHeader) // Dark header matching theme
                         ) {
                             ForEach(section.value) { contact in
                                 Button {
@@ -164,14 +164,14 @@ struct RecordView: View {
                                         Spacer()
                                         if viewModel.selectedContact?.id == contact.id {
                                             Image(systemName: "checkmark")
-                                                .foregroundColor(Color(hex: "5EEAD4"))
+                                                .foregroundColor(AppTheme.Colors.accent)
                                         }
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
                                     .background(
                                         viewModel.selectedContact?.id == contact.id ?
-                                        Color(hex: "2DD4BF").opacity(0.3) :
+                                        AppTheme.Colors.selection.opacity(0.3) :
                                             Color.clear
                                     )
                                     .contentShape(Rectangle()) // Ensure tap target is full row
@@ -203,7 +203,7 @@ struct RecordView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color(hex: "14B8A6")) // teal-500
+                    .background(AppTheme.Colors.primaryButton)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .padding()
@@ -215,7 +215,7 @@ struct RecordView: View {
         VStack {
             ProgressView()
                 .scaleEffect(2)
-                .tint(Color(hex: "5EEAD4"))
+                .tint(AppTheme.Colors.accent)
                 .padding(.bottom, 24)
             
             Text("Processing...")

@@ -185,6 +185,7 @@ class APIService {
         
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("mock_user_123", forHTTPHeaderField: "User-Id")
         
         var data = Data()
         

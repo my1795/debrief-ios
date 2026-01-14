@@ -12,16 +12,20 @@ import Combine
 @MainActor
 class DebriefDetailViewModel: ObservableObject {
     @Published var debrief: Debrief
-    @Published var isPlaying: Bool = false
+    @Published var isLoadingDetails: Bool = false
     @Published var isDeleting: Bool = false
     @Published var errorMessage: String?
+    @Published var isPlaying: Bool = false // This will be synced from audioService
     
     // Services
     private let apiService: APIService
+    private let audioService: AudioPlaybackService
+    private var cancellables = Set<AnyCancellable>()
     
     init(debrief: Debrief, apiService: APIService = .shared) {
         self.debrief = debrief
         self.apiService = apiService
+        self.audioService = AudioPlaybackService()
         
         // Debug Logging
         print("🔍 [DebriefDetailViewModel] Init with Debrief ID: \(debrief.id)")
@@ -31,11 +35,19 @@ class DebriefDetailViewModel: ObservableObject {
         print("   - Transcript Length: \(debrief.transcript?.count ?? 0)")
         print("   - Action Items: \(debrief.actionItems?.count ?? 0)")
         
+        // Sync Audio State
+        audioService.$isPlaying
+            .sink { [weak self] isPlaying in
+                self?.isPlaying = isPlaying
+            }
+            .store(in: &cancellables)
+            
         // Load full details immediately
         loadDebriefDetails()
     }
     
     func loadDebriefDetails() {
+        isLoadingDetails = true
         Task {
             do {
                 print("🔄 [DebriefDetailViewModel] Fetching full details for ID: \(debrief.id)...")
@@ -63,6 +75,7 @@ class DebriefDetailViewModel: ObservableObject {
                 print("❌ [DebriefDetailViewModel] Failed to load details: \(error)")
                 self.errorMessage = "Failed to load full details"
             }
+            isLoadingDetails = false
         }
     }
     
@@ -71,6 +84,7 @@ class DebriefDetailViewModel: ObservableObject {
         Task {
             do {
                 try await apiService.deleteDebrief(id: debrief.id)
+                audioService.stop() // Stop audio if deleting
                 completion()
             } catch {
                 print("❌ Error deleting debrief: \(error)")
@@ -81,14 +95,13 @@ class DebriefDetailViewModel: ObservableObject {
     }
     
     func toggleAudio() {
-        // Here we would implement real AVPlayer logic
-        // For now, toggle state for UI
-        isPlaying.toggle()
-        if isPlaying {
-            print("▶️ Playing audio from: \(debrief.audioUrl ?? "No URL")")
-        } else {
-            print("⏸️ Paused")
+        guard let urlString = debrief.audioUrl, let url = URL(string: urlString) else {
+            print("⚠️ [DebriefDetailViewModel] No valid audio URL")
+            errorMessage = "No Audio URL found"
+            return
         }
+        
+        audioService.toggle(url: url)
     }
     
     var shareableText: String {
