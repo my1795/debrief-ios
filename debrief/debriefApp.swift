@@ -1,22 +1,21 @@
-//
-//  debriefApp.swift
-//  debrief
-//
-//  Created by Mustafa Yıldırım on 13/01/2026.
-//
-
 import SwiftUI
 import SwiftData
+import FirebaseCore
+import GoogleSignIn
 
 @main
 struct debriefApp: App {
-    // Using mock data for UI implementation phase
-    // var sharedModelContainer: ModelContainer = ...
+    
+    init() {
+        FirebaseApp.configure()
+    }
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
+                .onOpenURL { url in
+                    GIDSignIn.sharedInstance.handle(url)
+                }
         }
-        // .modelContainer(sharedModelContainer)
     }
 }

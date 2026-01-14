@@ -23,26 +23,62 @@ class AuthSession: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var error: Error?
 
-    init() {
-        // Check for existing session (mock implementation)
-        // In real app, check Keychain/UserDefaults or Firebase.auth.currentUser
+    private let authService: AuthServiceProtocol
+    private var authListenerHandle: AnyObject?
+    
+    init(authService: AuthServiceProtocol = FirebaseAuthService()) {
+        self.authService = authService
+        
+        // Listen to auth state changes immediately
+        self.authListenerHandle = authService.listenToAuthState { [weak self] authUser in
+            Task { @MainActor in
+                self?.handleAuthStateChange(authUser)
+            }
+        }
+    }
+    
+    deinit {
+        // Handle cleanup if needed (FirebaseAuth listener is usually auto-managed but good practice)
+    }
+    
+    private func handleAuthStateChange(_ authUser: AuthUser?) {
+        if let authUser = authUser {
+            print("✅ [AuthSession] User is signed in: \(authUser.id)")
+            self.user = User(
+                id: authUser.id,
+                email: authUser.email,
+                displayName: authUser.displayName,
+                photoURL: authUser.photoURL
+            )
+            self.isAuthenticated = true
+        } else {
+            print("👋 [AuthSession] User is signed out")
+            self.user = nil
+            self.isAuthenticated = false
+        }
     }
     
     func signInWithGoogle() async {
         isLoading = true
         error = nil
         
-        // Simulate network delay
-        try? await Task.sleep(nanoseconds: 1 * 1_000_000_000)
+        do {
+            let _ = try await authService.signInWithGoogle()
+            // State update handled by listener
+        } catch {
+            print("❌ [AuthSession] Sign In Error: \(error)")
+            self.error = error
+        }
         
-        // Mock successful sign in
-        self.user = User(id: "mock_user_123", email: "test@example.com", displayName: "Test User", photoURL: nil)
-        self.isAuthenticated = true
-        self.isLoading = false
+        isLoading = false
     }
     
     func signOut() {
-        self.user = nil
-        self.isAuthenticated = false
+        do {
+            try authService.signOut()
+        } catch {
+            print("❌ [AuthSession] Sign Out Error: \(error)")
+            self.error = error
+        }
     }
 }
