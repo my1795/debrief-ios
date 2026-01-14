@@ -104,8 +104,13 @@ class APIService {
         let createdAt: Date?
     }
     
-    func getDebriefs() async throws -> [Debrief] {
-        guard let url = URL(string: "\(baseURL)/debriefs") else {
+    func getDebriefs(contactId: String? = nil) async throws -> [Debrief] {
+        var urlString = "\(baseURL)/debriefs"
+        if let contactId = contactId {
+            urlString += "?contactId=\(contactId)"
+        }
+        
+        guard let url = URL(string: urlString) else {
             throw APIError.invalidURL
         }
         
@@ -115,9 +120,7 @@ class APIService {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
-        if let jsonStr = String(data: data, encoding: .utf8) {
-            print("DEBUG API RAW JSON: \(jsonStr)")
-        }
+        // ... (rest of decoder logic is same, just need to close the function)
         
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -136,8 +139,8 @@ class APIService {
             }()
             
             return Debrief(
-                id: resp.debriefId ?? UUID().uuidString, // Fallback to local ID
-                contactId: resp.contactId ?? "", // Map contactId
+                id: resp.debriefId ?? UUID().uuidString,
+                contactId: resp.contactId ?? "",
                 contactName: "", // Name is resolved locally in ViewModel
                 occurredAt: resp.occurredAt ?? Date(),
                 duration: TimeInterval(resp.audioDurationSec ?? 0),
