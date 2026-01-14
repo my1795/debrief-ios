@@ -30,6 +30,40 @@ class DebriefDetailViewModel: ObservableObject {
         print("   - Audio URL: \(debrief.audioUrl ?? "N/A")")
         print("   - Transcript Length: \(debrief.transcript?.count ?? 0)")
         print("   - Action Items: \(debrief.actionItems?.count ?? 0)")
+        
+        // Load full details immediately
+        loadDebriefDetails()
+    }
+    
+    func loadDebriefDetails() {
+        Task {
+            do {
+                print("🔄 [DebriefDetailViewModel] Fetching full details for ID: \(debrief.id)...")
+                let fullDebrief = try await apiService.getDebrief(id: debrief.id)
+                
+                // Preserve locally known contact name
+                let updatedDebrief = Debrief(
+                    id: fullDebrief.id,
+                    contactId: fullDebrief.contactId,
+                    contactName: self.debrief.contactName, // Preserve
+                    occurredAt: fullDebrief.occurredAt,
+                    duration: fullDebrief.duration,
+                    status: fullDebrief.status,
+                    summary: fullDebrief.summary,
+                    transcript: fullDebrief.transcript,
+                    actionItems: fullDebrief.actionItems,
+                    audioUrl: fullDebrief.audioUrl
+                )
+                
+                self.debrief = updatedDebrief
+                print("✅ [DebriefDetailViewModel] Full details loaded.")
+                print("   - Summary: \(updatedDebrief.summary?.prefix(20) ?? "nil")...")
+                print("   - Audio URL: \(updatedDebrief.audioUrl ?? "nil")")
+            } catch {
+                print("❌ [DebriefDetailViewModel] Failed to load details: \(error)")
+                self.errorMessage = "Failed to load full details"
+            }
+        }
     }
     
     func deleteDebrief(completion: @escaping () -> Void) {

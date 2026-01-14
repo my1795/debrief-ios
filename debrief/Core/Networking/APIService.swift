@@ -127,28 +127,52 @@ class APIService {
         let responses = try decoder.decode([DebriefAPIResponse].self, from: data)
         
         return responses.map { resp in
-            let mappedStatus: DebriefStatus = {
-                switch resp.status {
-                case "PROCESSING": return .processing
-                case "READY": return .ready
-                case "FAILED": return .failed
-                default: return .draft
-                }
-            }()
-            
-            return Debrief(
-                id: resp.debriefId ?? UUID().uuidString,
-                contactId: resp.contactId ?? "",
-                contactName: "", // Name is resolved locally in ViewModel
-                occurredAt: resp.occurredAt ?? Date(),
-                duration: TimeInterval(resp.audioDurationSec ?? 0),
-                status: mappedStatus,
-                summary: resp.summary,
-                transcript: resp.transcript,
-                actionItems: resp.actionItems,
-                audioUrl: resp.audioUrl
-            )
+            mapResponseToDomain(resp)
         }
+    }
+    
+    func getDebrief(id: String) async throws -> Debrief {
+        guard let url = URL(string: "\(baseURL)/debriefs/\(id)") else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
+        let resp = try decoder.decode(DebriefAPIResponse.self, from: data)
+        return mapResponseToDomain(resp)
+    }
+    
+    // Helper to avoid duplication
+    private func mapResponseToDomain(_ resp: DebriefAPIResponse) -> Debrief {
+        let mappedStatus: DebriefStatus = {
+            switch resp.status {
+            case "PROCESSING": return .processing
+            case "READY": return .ready
+            case "FAILED": return .failed
+            default: return .draft
+            }
+        }()
+        
+        return Debrief(
+            id: resp.debriefId ?? UUID().uuidString,
+            contactId: resp.contactId ?? "",
+            contactName: "", // Name is resolved locally in ViewModel or by caller
+            occurredAt: resp.occurredAt ?? Date(),
+            duration: TimeInterval(resp.audioDurationSec ?? 0),
+            status: mappedStatus,
+            summary: resp.summary,
+            transcript: resp.transcript,
+            actionItems: resp.actionItems,
+            audioUrl: resp.audioUrl
+        )
     }
     
     func createDebrief(audioUrl: URL, contactId: String) async throws -> Debrief {
@@ -187,29 +211,7 @@ class APIService {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)
-        
-        // Map status string to Enum
-        let mappedStatus: DebriefStatus = {
-            switch resp.status {
-            case "PROCESSING": return .processing
-            case "READY": return .ready
-            case "FAILED": return .failed
-            default: return .draft
-            }
-        }()
-            
-        return Debrief(
-            id: resp.debriefId ?? "" ,
-            contactId: resp.contactId ?? "",
-            contactName: "", // Name is resolved locally
-            occurredAt: resp.occurredAt ?? Date(),
-            duration: TimeInterval(resp.audioDurationSec ?? 0),
-            status: mappedStatus,
-            summary: resp.summary,
-            transcript: resp.transcript,
-            actionItems: resp.actionItems,
-            audioUrl: resp.audioUrl
-        )
+        return mapResponseToDomain(resp)
     }
     func createDebrief(fileURL: URL, contactId: String?) async throws -> Debrief {
         // ... implementation hidden
