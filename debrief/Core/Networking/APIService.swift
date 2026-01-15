@@ -137,8 +137,10 @@ class APIService {
         )
     }
     
-    func createDebrief(audioUrl: URL, contactId: String) async throws -> Debrief {
-        guard let url = URL(string: "\(baseURL)/debriefs?contactId=\(contactId)") else {
+    func createDebrief(audioUrl: URL, contactId: String, duration: TimeInterval) async throws -> Debrief {
+        // Convert to Int seconds for API
+        let durationSec = Int(duration)
+        guard let url = URL(string: "\(baseURL)/debriefs?contactId=\(contactId)&durationSec=\(durationSec)") else {
             throw APIError.invalidURL
         }
         

@@ -17,7 +17,7 @@ class FirestoreService {
     func fetchDebriefs(userId: String) async throws -> [Debrief] {
         let snapshot = try await db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)
-           // .order(by: "occurredAt", descending: true)
+            .order(by: "occurredAt", descending: true)
             .getDocuments()
         
         return snapshot.documents.compactMap { document in
@@ -39,6 +39,22 @@ class FirestoreService {
         
         return snapshot.documents.compactMap { document in
             try? document.data(as: Debrief.self)
+        }
+    }
+    
+    // Added for Stats Refactor
+    func fetchDebriefs(userId: String, start: Date, end: Date) async throws -> [Debrief] {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        
+        let snapshot = try await db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+            
+        return snapshot.documents.compactMap { document in
+             try? document.data(as: Debrief.self)
         }
     }
     
@@ -88,5 +104,134 @@ class FirestoreService {
         
         let snapshot = try await countQuery.getAggregation(source: AggregateSource.server)
         return Int(truncating: snapshot.count)
+    }
+    // MARK: - Server-Side Stats Aggregations
+    
+    func getTotalDuration(userId: String, start: Date, end: Date) async throws -> Int {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        
+        let snapshot = try await db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+        
+        // Manual Summation for Robustness
+        // Backend might have `duration` OR `audioDurationSec` (legacy).
+        // Server-side aggregate only sums one field. Client-side processing covers both.
+        // We access the dictionary directly to avoid full object coding cost.
+        let totalSeconds = snapshot.documents.reduce(0.0) { sum, doc in
+            let data = doc.data()
+            var duration: Double = 0
+            
+            if let d = data["duration"] as? Double {
+                duration = d
+            } else if let d = data["duration"] as? Int { // Handle Int storage
+                duration = Double(d)
+            } else if let d = data["audioDurationSec"] as? Double {
+                duration = d
+            } else if let d = data["audioDurationSec"] as? Int {
+                duration = Double(d)
+            }
+            
+            return sum + duration
+        }
+        
+        return Int(totalSeconds)
+    }
+    
+    // Efficient fetch for Action Items (Client-side sum of array lengths, Server-side fetch of only array)
+    func getActionItemsStats(userId: String, start: Date, end: Date) async throws -> Int {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        
+        // Fetch only actionItems field (Using a custom projection DTO implies fetch entire doc in swift standard codable, 
+        // but Dictionary decoding is safer for partial data)
+        let snapshot = try await db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+            
+        // "Lean" processing: We assume the SDK might still fetch the doc, but we process only what we need.
+        // True "FieldMask" support in Swift SDK is limited for `getDocuments()`.
+        // However, this avoids decoding the huge "transcript" string if we use dictionary access.
+        
+        let totalActionItems = snapshot.documents.reduce(0) { sum, doc in
+            let items = doc.data()["actionItems"] as? [String] ?? []
+            return sum + items.count
+        }
+        
+        return totalActionItems
+    }
+    
+    // Efficient fetch for Unique Contacts
+    func getUniqueContactsStats(userId: String, start: Date, end: Date) async throws -> Int {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        
+        let snapshot = try await db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+        
+        let uniqueContacts = Set(snapshot.documents.compactMap { doc -> String? in
+            let cid = doc.data()["contactId"] as? String
+            return (cid?.isEmpty == false) ? cid : nil
+        })
+        
+        return uniqueContacts.count
+    }
+    
+    // MARK: - Consolidated Weekly Stats
+    
+    /// Fetches all weekly stats in a single optimized query
+    func getWeeklyStats(userId: String, start: Date, end: Date) async throws -> WeeklyStats {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        
+        let snapshot = try await db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+        
+        var totalDuration: Double = 0
+        var totalActionItems = 0
+        var contactIds = Set<String>()
+        
+        for doc in snapshot.documents {
+            let data = doc.data()
+            
+            // Duration
+            if let d = data["duration"] as? Double {
+                totalDuration += d
+            } else if let d = data["duration"] as? Int {
+                totalDuration += Double(d)
+            } else if let d = data["audioDurationSec"] as? Double {
+                totalDuration += d
+            } else if let d = data["audioDurationSec"] as? Int {
+                totalDuration += Double(d)
+            }
+            
+            // Action Items
+            if let items = data["actionItems"] as? [String] {
+                totalActionItems += items.count
+            }
+            
+            // Unique Contacts
+            if let cid = data["contactId"] as? String, !cid.isEmpty {
+                contactIds.insert(cid)
+            }
+        }
+        
+        return WeeklyStats(
+            count: snapshot.documents.count,
+            duration: Int(totalDuration),
+            actionItems: totalActionItems,
+            uniqueContacts: contactIds.count
+        )
     }
 }

@@ -87,6 +87,15 @@ struct UsageEvent: Identifiable {
     let count: Int
 }
 
+// MARK: - Weekly Stats Aggregation
+
+struct WeeklyStats {
+    let count: Int           // Number of debriefs
+    let duration: Int        // Total duration in seconds
+    let actionItems: Int     // Total action items
+    let uniqueContacts: Int  // Unique contacts count
+}
+
 // MARK: - Mock Data
 
 extension StatsOverview {

@@ -52,7 +52,6 @@ class StatsViewModel: ObservableObject {
         print("📊 [StatsViewModel] Starting loadData...") // LOGGING
         
         await loadWidgetData()
-        await loadWidgetData()
         await loadOverviewData()
         
         isLoading = false
@@ -64,36 +63,59 @@ class StatsViewModel: ObservableObject {
             let prevWeekStart = Calendar.current.date(byAdding: .day, value: -7, to: thisWeekStart)!
             let prevWeekEnd = Calendar.current.date(byAdding: .day, value: -7, to: thisWeekEnd)!
             
-            async let thisWeekDebriefs = statsService.getDebriefsCount(start: thisWeekStart, end: thisWeekEnd)
-            async let prevWeekDebriefs = statsService.getDebriefsCount(start: prevWeekStart, end: prevWeekEnd)
+            // We need USER ID to fetch data
+            // Assuming we can get it from AuthSession or injected. 
+            // Since this is a ViewModel, we might need to inject it or fetch from AuthSession singleton if unavoidable.
+            // Ideally passing it in loadData is better, but for now lets try to get it from where StatsService gets it?
+            // Wait, StatsService doesn't store userId. 
+            // Fix: We must access AuthSession.shared or inject it.
+            // For now, assuming we can get current user ID. 
+            guard let userId = AuthSession.shared.user?.id else { return }
+
+            // Fetch actual documents to allow flexible calculation (Minutes, Unique Contacts)
+            // Fetch Consolidated Stats
+            async let thisWeekStats = FirestoreService.shared.getWeeklyStats(userId: userId, start: thisWeekStart, end: thisWeekEnd)
+            async let prevWeekStats = FirestoreService.shared.getWeeklyStats(userId: userId, start: prevWeekStart, end: prevWeekEnd)
             
-            async let thisWeekCalls = statsService.getCallsCount(start: thisWeekStart, end: thisWeekEnd)
-            async let prevWeekCalls = statsService.getCallsCount(start: prevWeekStart, end: prevWeekEnd)
+            let (curr, prev) = try await (thisWeekStats, prevWeekStats)
             
-            let (debCurr, debPrev, callCurr, callPrev) = try await (thisWeekDebriefs, prevWeekDebriefs, thisWeekCalls, prevWeekCalls)
-            
-            // Calculate trends
+            // --- 1. Debriefs Count ---
+            let debCurr = curr.count
+            let debPrev = prev.count
             let debriefTrend = calculateTrend(current: Double(debCurr), previous: Double(debPrev))
-            let callTrend = calculateTrend(current: Double(callCurr), previous: Double(callPrev))
             
-            let completionRate = callCurr > 0 ? Int((Double(debCurr) / Double(callCurr)) * 100) : 0
-            let prevCompletionRate = callPrev > 0 ? Int((Double(debPrev) / Double(callPrev)) * 100) : 0
-            let rateTrend = calculateTrend(current: Double(completionRate), previous: Double(prevCompletionRate))
+            // --- 2. Action Items Count ---
+            let actionItemsCurr = curr.actionItems
+            let actionItemsPrev = prev.actionItems
+            let actionItemsTrend = calculateTrend(current: Double(actionItemsCurr), previous: Double(actionItemsPrev))
             
-            let estMinutes = debCurr * 3
-            let prevEstMinutes = debPrev * 3
-            let minTrend = calculateTrend(current: Double(estMinutes), previous: Double(prevEstMinutes))
+            // --- 3. Unique Contacts ---
+            let uniqueContactsCurr = curr.uniqueContacts
+            let uniqueContactsPrev = prev.uniqueContacts
+            let contactsTrend = calculateTrend(current: Double(uniqueContactsCurr), previous: Double(uniqueContactsPrev))
+            
+            // --- 4. Total Duration ---
+            let totalSecsCurr = curr.duration
+            let totalSecsPrev = prev.duration
+            let minTrend = calculateTrend(current: Double(totalSecsCurr), previous: Double(totalSecsPrev))
+            
+            // Formatting: Duration
+            let durationValue: String
+            if totalSecsCurr < 60 {
+                durationValue = "\(totalSecsCurr) sec"
+            } else {
+                durationValue = "\(Int(ceil(Double(totalSecsCurr) / 60.0))) min"
+            }
             
             self.stats = [
-                StatsDisplayData(title: "Debriefs", value: "\(debCurr)", subValue: debriefTrend, isPositive: isPositive(debCurr, debPrev), icon: "doc.text.fill"),
-                StatsDisplayData(title: "Calls", value: "\(callCurr)", subValue: callTrend, isPositive: isPositive(callCurr, callPrev), icon: "phone.fill"),
-                StatsDisplayData(title: "Rate", value: "\(completionRate)%", subValue: rateTrend, isPositive: isPositive(completionRate, prevCompletionRate), icon: "chart.pie.fill"),
-                StatsDisplayData(title: "Mins", value: "\(estMinutes)", subValue: minTrend, isPositive: isPositive(estMinutes, prevEstMinutes), icon: "clock.fill")
+                StatsDisplayData(title: "Total Debriefs", value: "\(debCurr)", subValue: debriefTrend, isPositive: isPositive(debCurr, debPrev), icon: "mic.fill"),
+                StatsDisplayData(title: "Duration per Week", value: durationValue, subValue: minTrend, isPositive: isPositive(totalSecsCurr, totalSecsPrev), icon: "clock.fill"),
+                StatsDisplayData(title: "Action Items", value: "\(actionItemsCurr)", subValue: actionItemsTrend, isPositive: isPositive(actionItemsCurr, actionItemsPrev), icon: "checklist"),
+                StatsDisplayData(title: "Active Contacts", value: "\(uniqueContactsCurr)", subValue: contactsTrend, isPositive: isPositive(uniqueContactsCurr, uniqueContactsPrev), icon: "person.2.fill")
             ]
             
         } catch {
             print("Widget Stats Error: \(error)")
-            // Don't set global error here to allow other parts to load if partial failure
         }
     }
     

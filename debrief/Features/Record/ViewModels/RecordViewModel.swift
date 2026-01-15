@@ -153,7 +153,7 @@ class RecordViewModel: ObservableObject {
         
         Task {
             do {
-                let _ = try await apiService.createDebrief(audioUrl: url, contactId: contact.id)
+                let _ = try await apiService.createDebrief(audioUrl: url, contactId: contact.id, duration: recordingTime)
                 state = .complete
                 try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
                 onComplete()

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AppRootView: View {
-    @StateObject private var authSession = AuthSession()
+    @StateObject private var authSession = AuthSession.shared
     
     var body: some View {
         Group {

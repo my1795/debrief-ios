@@ -44,38 +44,28 @@ struct StatsOverviewView: View {
             .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
             
             // MARK: - Key Metrics Grid
+            HStack {
+                Text("Weekly Stats")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Spacer()
+                Text("(Sun - Sun)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal)
+            
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                MetricCard(
-                    title: "Total Debriefs",
-                    value: "\(viewModel.overview.totalDebriefs)",
-                    icon: "mic.fill",
-                    trend: viewModel.trends.debriefsChangePercent,
-                    infoText: "Debriefs created this week vs last week"
-                )
-                
-                MetricCard(
-                    title: "Total Minutes",
-                    value: "\(viewModel.overview.totalMinutes)",
-                    icon: "clock.fill",
-                    trend: viewModel.trends.minutesChangePercent,
-                    infoText: "Total minutes recorded for voice memos this week"
-                )
-                
-                MetricCard(
-                    title: "Action Items",
-                    value: "\(viewModel.overview.totalActionItems)",
-                    icon: "checklist",
-                    trend: viewModel.trends.actionItemsChangePercent,
-                    infoText: "Total action items in your full data pool"
-                )
-                
-                MetricCard(
-                    title: "Contacts",
-                    value: "\(viewModel.overview.totalContacts)",
-                    icon: "person.2.fill",
-                    detail: "Active contacts",
-                    infoText: "Contacts you had calls with this week"
-                )
+                // Use the calculated Weekly Stats from ViewModel
+                ForEach(viewModel.stats) { stat in
+                    MetricCard(
+                        title: stat.title,
+                        value: stat.value,
+                        icon: stat.icon,
+                        trendString: stat.subValue,
+                        infoText: nil
+                    )
+                }
             }
             
             // MARK: - Quick Stats List
@@ -207,6 +197,7 @@ struct MetricCard: View {
     let value: String
     let icon: String
     var trend: Double? = nil
+    var trendString: String? = nil // Support pre-formatted strings (e.g. "+100%", "Infinite")
     var detail: String? = nil
     @State private var showInfo = false
     var infoText: String? = nil
@@ -236,7 +227,23 @@ struct MetricCard: View {
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.white)
             
-            if let trend = trend {
+            if let trendString = trendString {
+                 HStack(spacing: 4) {
+                     // Simple heuristic: if it starts with "+", green. If "-", red.
+                     let isPositive = trendString.hasPrefix("+")
+                     let isNegative = trendString.hasPrefix("-")
+                     
+                     if isPositive {
+                         Image(systemName: "arrow.up.right")
+                     } else if isNegative && trendString != "- 0.0%" {
+                         Image(systemName: "arrow.down.right")
+                     }
+                     Text(trendString)
+                 }
+                 .font(.caption.bold())
+                 .foregroundStyle(trendString.hasPrefix("+") ? .green : (trendString == "- 0.0%" ? .white.opacity(0.6) : .red))
+                 
+            } else if let trend = trend {
                 HStack(spacing: 4) {
                     if abs(trend) < 0.1 {
                         Text("-")

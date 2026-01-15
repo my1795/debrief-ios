@@ -18,6 +18,7 @@ struct User: Identifiable, Codable {
 
 @MainActor
 class AuthSession: ObservableObject {
+    static let shared = AuthSession() // Singleton for easier access in non-view contexts
     @Published var user: User?
     @Published var isAuthenticated: Bool = false
     @Published var isLoading: Bool = false

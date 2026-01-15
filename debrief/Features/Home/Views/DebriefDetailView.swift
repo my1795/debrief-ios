@@ -203,11 +203,7 @@ struct DebriefDetailView: View {
                 .font(.headline)
                 .foregroundColor(.white)
             
-            Text(content)
-                .font(font)
-                .foregroundColor(.white.opacity(0.85))
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ExpandableText(text: content, font: font)
         }
         .padding()
         .background(.white.opacity(0.08))
@@ -316,3 +312,41 @@ struct ActivityViewController: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: UIViewControllerRepresentableContext<ActivityViewController>) {}
 }
 
+
+struct ExpandableText: View {
+    let text: String
+    let font: Font
+    @State private var isExpanded = false
+    
+    // Config
+    private let lineLimit = 4
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(text)
+                .font(font)
+                .foregroundColor(.white.opacity(0.85))
+                .lineSpacing(4)
+                .lineLimit(isExpanded ? nil : lineLimit)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // Only show button if text is long enough (simple heuristic or always show for consistency)
+            // For true conditional text, we'd need GeometryReader or TextRenderer, but simple toggle is safer for now.
+            // We'll show "Show More" if it's not expanded, "Show Less" if it is.
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Text(isExpanded ? "Show Less" : "Show More")
+                        .font(.caption.bold())
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2.bold())
+                }
+                .foregroundStyle(Color.teal) // Using teal theme
+                .padding(.top, 4)
+            }
+        }
+    }
+}
