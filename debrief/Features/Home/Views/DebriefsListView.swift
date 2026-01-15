@@ -39,13 +39,13 @@ struct DebriefsListView: View {
                             HStack(spacing: 8) {
                                 HStack(spacing: 4) {
                                     Text("📝")
-                                    Text("\(viewModel.stats.today)")
+                                    Text(viewModel.stats.today > 100 ? "100+" : "\(viewModel.stats.today)")
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.white)
                                     Text("/")
                                         .foregroundStyle(.white.opacity(0.6))
                                     Text("📞")
-                                    Text("\(viewModel.stats.total)")
+                                    Text(viewModel.stats.total > 100 ? "100+" : "\(viewModel.stats.total)")
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.white)
                                 }
@@ -58,7 +58,7 @@ struct DebriefsListView: View {
                                 
                                 HStack(spacing: 4) {
                                     Text("⏱️")
-                                    Text("\(viewModel.stats.totalMins)")
+                                    Text(viewModel.stats.totalMins > 100 ? "100+" : "\(viewModel.stats.totalMins)")
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.white)
                                     Text("min")

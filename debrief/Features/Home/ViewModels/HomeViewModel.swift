@@ -81,6 +81,8 @@ class HomeViewModel: ObservableObject {
                         audioUrl: debrief.audioUrl
                     )
                 }
+                
+                print("📜 [HomeViewModel] Debrief: \(finalDebrief.id) - Duration: \(finalDebrief.duration)s")
                 resolvedDebriefs.append(finalDebrief)
             }
             
@@ -110,10 +112,17 @@ class HomeViewModel: ObservableObject {
     
 
     
-    var stats: (today: Int, total: Int, totalMins: Int) {
+    var stats: (today: Int, total: Int, todayMins: Int, totalMins: Int) {
         let totalCalls = debriefs.count
-        let totalMins = Int(debriefs.reduce(0) { $0 + $1.duration } / 60)
-        let today = debriefs.filter { Calendar.current.isDateInToday($0.occurredAt) }.count
-        return (today, totalCalls, totalMins)
+        let totalSecs = debriefs.reduce(0) { $0 + $1.duration }
+        // Use ceil to avoid 0 mins for short calls
+        let totalMins = Int(ceil(totalSecs / 60))
+        
+        let todayDebriefs = debriefs.filter { Calendar.current.isDateInToday($0.occurredAt) }
+        let today = todayDebriefs.count
+        let todaySecs = todayDebriefs.reduce(0) { $0 + $1.duration }
+        let todayMins = Int(ceil(todaySecs / 60))
+        
+        return (today, totalCalls, todayMins, totalMins)
     }
 }
