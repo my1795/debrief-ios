@@ -35,7 +35,6 @@ struct DebriefsListView: View {
                                 .foregroundStyle(.white)
                             
                             Spacer()
-                            
                             // Status Bar
                             HStack(spacing: 8) {
                                 HStack(spacing: 4) {

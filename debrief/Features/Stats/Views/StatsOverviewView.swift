@@ -50,7 +50,7 @@ struct StatsOverviewView: View {
                     value: "\(viewModel.overview.totalDebriefs)",
                     icon: "mic.fill",
                     trend: viewModel.trends.debriefsChangePercent,
-                    infoText: "Debriefs created this month vs last month"
+                    infoText: "Debriefs created this week vs last week"
                 )
                 
                 MetricCard(
@@ -58,7 +58,7 @@ struct StatsOverviewView: View {
                     value: "\(viewModel.overview.totalMinutes)",
                     icon: "clock.fill",
                     trend: viewModel.trends.minutesChangePercent,
-                    infoText: "Total recording time vs last month"
+                    infoText: "Total minutes recorded for voice memos this week"
                 )
                 
                 MetricCard(
@@ -66,7 +66,7 @@ struct StatsOverviewView: View {
                     value: "\(viewModel.overview.totalActionItems)",
                     icon: "checklist",
                     trend: viewModel.trends.actionItemsChangePercent,
-                    infoText: "Action items generated vs last month"
+                    infoText: "Total action items in your full data pool"
                 )
                 
                 MetricCard(
@@ -74,7 +74,7 @@ struct StatsOverviewView: View {
                     value: "\(viewModel.overview.totalContacts)",
                     icon: "person.2.fill",
                     detail: "Active contacts",
-                    infoText: "Contacts with at least one debrief"
+                    infoText: "Contacts you had calls with this week"
                 )
             }
             
@@ -238,11 +238,20 @@ struct MetricCard: View {
             
             if let trend = trend {
                 HStack(spacing: 4) {
-                    Image(systemName: trend > 0 ? "arrow.up.right" : "arrow.down.right")
-                    Text("\(String(format: "%.1f", abs(trend)))%")
+                    if abs(trend) < 0.1 {
+                        Text("-")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text("0.0%")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white.opacity(0.6))
+                    } else {
+                        Image(systemName: trend > 0 ? "arrow.up.right" : "arrow.down.right")
+                        Text("\(String(format: "%.1f", abs(trend)))%")
+                    }
                 }
                 .font(.caption.bold())
-                .foregroundStyle(trend > 0 ? .green : .red)
+                .foregroundStyle(abs(trend) < 0.1 ? .white.opacity(0.6) : (trend > 0 ? .green : .red))
             } else if let detail = detail {
                 Text(detail)
                     .font(.caption)

@@ -11,6 +11,14 @@ import Foundation
 
 // MARK: - API Response Models
 
+struct CallCountResponse: Codable {
+    let count: Int
+}
+
+struct DebriefCountResponse: Codable {
+    let count: Int
+}
+
 struct OverviewResponse: Decodable {
     let allTimeStats: AllTimeStats
     // Note: API returns top-level object wrapper.
@@ -99,6 +107,12 @@ extension StatsTrends {
         debriefsChangePercent: -20.0,
         minutesChangePercent: 5.6,
         actionItemsChangePercent: 21.4
+    )
+    
+    static let empty = StatsTrends(
+        debriefsChangePercent: 0,
+        minutesChangePercent: 0,
+        actionItemsChangePercent: 0
     )
 }
 
