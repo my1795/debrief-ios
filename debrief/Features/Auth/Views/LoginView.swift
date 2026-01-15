@@ -29,15 +29,15 @@ struct LoginView: View {
                 
                 // Logo/Brand
                 VStack(spacing: 16) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(.white.opacity(0.1))
-                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                        Image("Logo")
+                            .resizable()
+                            .scaledToFit()
                             .frame(width: 100, height: 100)
-                        
-                        Text("🎙️")
-                            .font(.system(size: 48))
-                    }
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
                     .padding(.bottom, 16)
                     
                     Text("Debrief")
