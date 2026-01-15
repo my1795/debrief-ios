@@ -18,6 +18,7 @@ struct AppRootView: View {
                 LoginView(authSession: authSession)
             }
         }
+        .environmentObject(authSession)
         .animation(.easeInOut, value: authSession.isAuthenticated)
     }
 }
