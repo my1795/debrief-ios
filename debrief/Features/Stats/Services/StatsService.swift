@@ -6,9 +6,9 @@
 //
 
 import Foundation
+import FirebaseAuth
 
 protocol StatsServiceProtocol {
-    func getOverview() async throws -> OverviewResponse
     func getCallsCount(start: Date, end: Date) async throws -> Int
     func getDebriefsCount(start: Date, end: Date) async throws -> Int
     func syncCalls(calls: [Int64]) async throws -> Int
@@ -16,56 +16,31 @@ protocol StatsServiceProtocol {
 
 class StatsService: StatsServiceProtocol {
     private let apiService: APIService
+    private let firestoreService: FirestoreService
     private let contactStoreService: ContactStoreService
     private let session: URLSession
     private let baseURL = "http://localhost:8080/v1" // Align with APIService
     
-    init(apiService: APIService = .shared, contactStoreService: ContactStoreService = .shared, session: URLSession = .shared) {
+    init(apiService: APIService = .shared, firestoreService: FirestoreService = .shared, contactStoreService: ContactStoreService = .shared, session: URLSession = .shared) {
         self.apiService = apiService
+        self.firestoreService = firestoreService
         self.contactStoreService = contactStoreService
         self.session = session
     }
     
-    func getOverview() async throws -> OverviewResponse {
-        return try await apiService.getStatsOverview()
-    }
-    
     func getCallsCount(start: Date, end: Date) async throws -> Int {
-        let startMs = Int64(start.timeIntervalSince1970 * 1000)
-        let endMs = Int64(end.timeIntervalSince1970 * 1000)
-        
-        guard let url = URL(string: "\(baseURL)/calls/count?start=\(startMs)&end=\(endMs)") else {
-            throw APIError.invalidURL
+        guard let userId = Auth.auth().currentUser?.uid else {
+             // If no user, return 0 or throw. Returning 0 is safer for stats UI.
+             return 0
         }
-        
-        let (data, response) = try await session.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
-        }
-        
-        let decoder = JSONDecoder()
-        let result = try decoder.decode(CallCountResponse.self, from: data)
-        return result.count
+        return try await firestoreService.getCallsCount(userId: userId, start: start, end: end)
     }
     
     func getDebriefsCount(start: Date, end: Date) async throws -> Int {
-        let startMs = Int64(start.timeIntervalSince1970 * 1000)
-        let endMs = Int64(end.timeIntervalSince1970 * 1000)
-        
-        guard let url = URL(string: "\(baseURL)/debriefs/count?start=\(startMs)&end=\(endMs)") else {
-            throw APIError.invalidURL
+        guard let userId = Auth.auth().currentUser?.uid else {
+             return 0
         }
-        
-        let (data, response) = try await session.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
-        }
-        
-        let decoder = JSONDecoder()
-        let result = try decoder.decode(DebriefCountResponse.self, from: data)
-        return result.count
+        return try await firestoreService.getDebriefsCount(userId: userId, start: start, end: end)
     }
     
     func syncCalls(calls: [Int64]) async throws -> Int {

@@ -13,8 +13,8 @@ struct DebriefDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var isExporting = false
     
-    init(debrief: Debrief) {
-        _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief))
+    init(debrief: Debrief, userId: String) {
+        _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief, userId: userId))
     }
     
     var body: some View {

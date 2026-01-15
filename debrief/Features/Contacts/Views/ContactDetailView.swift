@@ -11,6 +11,7 @@ struct ContactDetailView: View {
     let contact: Contact
     @State private var debriefs: [Debrief] = [] // Will fetch later
     @State private var isLoading = false
+    @EnvironmentObject var authSession: AuthSession
     
     var body: some View {
         ZStack {
@@ -79,7 +80,7 @@ struct ContactDetailView: View {
                                 ForEach(debriefs) { debrief in
                                     // Reuse the shared component, hiding name since we are in that contact's detail
                                     // And enable NAVIGATION to the full detail view
-                                    NavigationLink(destination: DebriefDetailView(debrief: debrief)) {
+                                    NavigationLink(destination: DebriefDetailView(debrief: debrief, userId: authSession.user?.id ?? "")) {
                                         DebriefRowView(debrief: debrief, showContactName: false)
                                     }
                                     .buttonStyle(.plain)
@@ -98,12 +99,15 @@ struct ContactDetailView: View {
     }
     
     func loadDebriefs() async {
+        guard let userId = authSession.user?.id else {
+            print("⚠️ [ContactDetailView] No user ID available")
+            return
+        }
+        
         isLoading = true
         do {
-            // Fetch debriefs for this contact ID
-            // Ideally, backend supports filtering by contactId.
-            // Using APIService.shared.getDebriefs(contactId: contact.id)
-            let allDebriefs = try await APIService.shared.getDebriefs(contactId: contact.id)
+            // Fetch debriefs for this contact ID using FirestoreService
+            let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, contactId: contact.id)
             self.debriefs = allDebriefs.sorted(by: { $0.occurredAt > $1.occurredAt })
         } catch {
             print("Error loading contact debriefs: \(error)")

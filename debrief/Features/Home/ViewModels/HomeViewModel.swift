@@ -14,19 +14,16 @@ class HomeViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var filteredDebriefs: [Debrief] = []
     
-    private let apiService = APIService.shared
+    private let firestoreService = FirestoreService.shared
     private let contactStoreService: ContactStoreServiceProtocol
     
     init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService()) {
         self.contactStoreService = contactStoreService
-        Task {
-            await fetchDebriefs()
-        }
     }
     
-    func fetchDebriefs() async {
+    func fetchDebriefs(userId: String) async {
         do {
-            let fetchedDebriefs = try await apiService.getDebriefs()
+            let fetchedDebriefs = try await firestoreService.fetchDebriefs(userId: userId)
             
             // Resolve Names locally if missing
             var resolvedDebriefs: [Debrief] = []
@@ -40,6 +37,7 @@ class HomeViewModel: ObservableObject {
                     if let localName = await contactStoreService.getContactName(for: debrief.contactId) {
                         finalDebrief = Debrief(
                             id: debrief.id,
+                            userId: debrief.userId, // Use from fetched (or passed userId)
                             contactId: debrief.contactId,
                             contactName: localName, // Resolved Name
                             occurredAt: debrief.occurredAt,
@@ -48,13 +46,15 @@ class HomeViewModel: ObservableObject {
                             summary: debrief.summary,
                             transcript: debrief.transcript,
                             actionItems: debrief.actionItems,
-                            audioUrl: debrief.audioUrl
+                            audioUrl: debrief.audioUrl,
+                            audioStoragePath: debrief.audioStoragePath
                         )
                     } else {
                          // Fallback if ID not found in device (e.g. deleted contact)
                          // finalDebrief name remains "" or we can set "Deleted Contact"
                          finalDebrief = Debrief(
                             id: debrief.id,
+                            userId: debrief.userId,
                             contactId: debrief.contactId,
                             contactName: "Deleted Contact", // Or keep empty? User said "Deleted Contact" in example code
                             occurredAt: debrief.occurredAt,
@@ -63,13 +63,15 @@ class HomeViewModel: ObservableObject {
                             summary: debrief.summary,
                             transcript: debrief.transcript,
                             actionItems: debrief.actionItems,
-                            audioUrl: debrief.audioUrl
+                            audioUrl: debrief.audioUrl,
+                            audioStoragePath: debrief.audioStoragePath
                         )
                     }
                 } else {
                     // No contact ID involved
                     finalDebrief = Debrief(
                         id: debrief.id,
+                        userId: debrief.userId,
                         contactId: "",
                         contactName: "Unknown",
                         occurredAt: debrief.occurredAt,
@@ -78,7 +80,8 @@ class HomeViewModel: ObservableObject {
                         summary: debrief.summary,
                         transcript: debrief.transcript,
                         actionItems: debrief.actionItems,
-                        audioUrl: debrief.audioUrl
+                        audioUrl: debrief.audioUrl,
+                        audioStoragePath: debrief.audioStoragePath
                     )
                 }
                 

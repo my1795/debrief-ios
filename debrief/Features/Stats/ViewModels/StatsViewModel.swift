@@ -52,7 +52,8 @@ class StatsViewModel: ObservableObject {
         print("📊 [StatsViewModel] Starting loadData...") // LOGGING
         
         await loadWidgetData()
-        await loadLegacyOverviewData()
+        await loadWidgetData()
+        await loadOverviewData()
         
         isLoading = false
     }
@@ -96,41 +97,35 @@ class StatsViewModel: ObservableObject {
         }
     }
     
-    private func loadLegacyOverviewData() async {
+    private func loadOverviewData() async {
         do {
-            let response = try await statsService.getOverview()
+            // All Time Stats from Firestore
+            let safeStart = Date(timeIntervalSince1970: 0) // Avoids 'Timestamp out of range' crash
+            async let totalDebriefsDiff = statsService.getDebriefsCount(start: safeStart, end: Date())
+            async let totalCallsDiff = statsService.getCallsCount(start: safeStart, end: Date())
             
-            // Map API response to UI Model
-            let stats = response.allTimeStats
+            let (totalDebriefs, _) = try await (totalDebriefsDiff, totalCallsDiff)
+            
+            // For now, we don't have efficient Sum aggregation on client without fetching all docs.
+            // We will set totalMinutes to an estimate or 0.
+            // Ideally backend would do this, but we are moving away from backend.
+            
             self.overview = StatsOverview(
-                totalDebriefs: stats.totalDebriefs,
-                totalMinutes: stats.totalMinutes,
+                totalDebriefs: totalDebriefs,
+                totalMinutes: 0, // Placeholder until Sum Aggregation is added
                 totalActionItems: 0,
                 totalContacts: 0,
-                avgDebriefDuration: stats.avgMinutesPerDay ?? 0.0,
+                avgDebriefDuration: 0.0,
                 completionRate: 0,
                 mostActiveDay: "-",
                 longestStreak: 0
             )
             
-            if let top = stats.topContact, let name = top.name {
-                self.topContacts = [
-                    TopContactStat(
-                        id: top.contactId ?? UUID().uuidString,
-                        name: name,
-                        company: "",
-                        debriefs: top.debriefCount,
-                        minutes: top.totalMinutes,
-                        percentage: 0
-                    )
-                ]
-            } else {
-                self.topContacts = []
-            }
+            // Top Contacts requires more complex query, leaving empty for now to solve errors
+            self.topContacts = []
             
         } catch {
-            print("Legacy Stats Error: \(error)")
-            // Fallback to empty if failed, preserve mock if we want but here let's be strict
+            print("Overview Stats Error: \(error)")
         }
     }
     

@@ -19,12 +19,18 @@ class DebriefDetailViewModel: ObservableObject {
     
     // Services
     private let apiService: APIService
+    private let firestoreService: FirestoreService
+    private let storageService: StorageService
     private let audioService: AudioPlaybackService
     private var cancellables = Set<AnyCancellable>()
+    private let userId: String
     
-    init(debrief: Debrief, apiService: APIService = .shared) {
+    init(debrief: Debrief, userId: String, apiService: APIService = .shared, firestoreService: FirestoreService = .shared, storageService: StorageService = .shared) {
         self.debrief = debrief
+        self.userId = userId
         self.apiService = apiService
+        self.firestoreService = firestoreService
+        self.storageService = storageService
         self.audioService = AudioPlaybackService()
         
         // Debug Logging
@@ -51,11 +57,25 @@ class DebriefDetailViewModel: ObservableObject {
         Task {
             do {
                 print("🔄 [DebriefDetailViewModel] Fetching full details for ID: \(debrief.id)...")
-                let fullDebrief = try await apiService.getDebrief(id: debrief.id)
+                let fullDebrief = try await firestoreService.getDebrief(userId: userId, debriefId: debrief.id)
+                
+                // Resolve Audio URL if missing but storage path exists
+                var resolvedAudioUrl = fullDebrief.audioUrl
+                if (resolvedAudioUrl == nil || resolvedAudioUrl?.isEmpty == true),
+                   let storagePath = fullDebrief.audioStoragePath {
+                    do {
+                        let url = try await storageService.getDownloadURL(for: storagePath)
+                        resolvedAudioUrl = url.absoluteString
+                        print("🔗 [DebriefDetailViewModel] Resolved Audio Storage Path: \(url)")
+                    } catch {
+                        print("⚠️ [DebriefDetailViewModel] Failed to resolve storage path: \(error)")
+                    }
+                }
                 
                 // Preserve locally known contact name
                 let updatedDebrief = Debrief(
                     id: fullDebrief.id,
+                    userId: self.userId, // Maintain consistency
                     contactId: fullDebrief.contactId,
                     contactName: self.debrief.contactName, // Preserve
                     occurredAt: fullDebrief.occurredAt,
@@ -64,7 +84,8 @@ class DebriefDetailViewModel: ObservableObject {
                     summary: fullDebrief.summary,
                     transcript: fullDebrief.transcript,
                     actionItems: fullDebrief.actionItems,
-                    audioUrl: fullDebrief.audioUrl
+                    audioUrl: resolvedAudioUrl,
+                    audioStoragePath: fullDebrief.audioStoragePath
                 )
                 
                 self.debrief = updatedDebrief

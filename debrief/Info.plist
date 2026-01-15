@@ -2,24 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSContactsUsageDescription</key>
-	<string>We need access to your contacts to let you select who you are debriefing about.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>We need access to your microphone to record your debriefs.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.306744525686-7p3d1qtmujd5s1rtblt2taeknj066jun</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 	</array>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>com.googleusercontent.apps.306744525686-7p3d1qtmujd5s1rtblt2taeknj066jun</string>
-            </array>
-        </dict>
-    </array>
 </dict>
 </plist>

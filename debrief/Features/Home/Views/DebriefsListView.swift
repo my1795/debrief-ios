@@ -98,7 +98,7 @@ struct DebriefsListView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.filteredDebriefs) { debrief in
-                                NavigationLink(destination: DebriefDetailView(debrief: debrief)) {
+                                NavigationLink(destination: DebriefDetailView(debrief: debrief, userId: authSession.user?.id ?? "")) {
                                     DebriefRowView(debrief: debrief, showContactName: true)
                                 }
                                 .buttonStyle(.plain)
@@ -109,8 +109,19 @@ struct DebriefsListView: View {
                     }
                 }
             }
-            .onAppear {
-                viewModel.filterDebriefs()
+            .task {
+                if let userId = authSession.user?.id {
+                    await viewModel.fetchDebriefs(userId: userId)
+                } else {
+                    // Handle unauthenticated state if needed, or wait for auth
+                }
+            }
+            .onChange(of: authSession.user?.id) { newValue in
+                if let userId = newValue {
+                    Task {
+                        await viewModel.fetchDebriefs(userId: userId)
+                    }
+                }
             }
         }
     }

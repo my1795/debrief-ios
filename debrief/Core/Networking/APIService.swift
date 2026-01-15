@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 
 enum APIError: Error {
     case invalidURL
@@ -104,53 +105,13 @@ class APIService {
         let audioUrl: String?
     }
     
-    func getDebriefs(contactId: String? = nil) async throws -> [Debrief] {
-        var urlString = "\(baseURL)/debriefs"
-        if let contactId = contactId {
-            urlString += "?contactId=\(contactId)"
-        }
-        
-        guard let url = URL(string: urlString) else {
-            throw APIError.invalidURL
-        }
-        
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
-        let responses = try decoder.decode([DebriefAPIResponse].self, from: data)
-        
-        return responses.map { resp in
-            mapResponseToDomain(resp)
-        }
-    }
+    // Deprecated: Uses FirestoreService now
+    // func getDebriefs(contactId: String? = nil) async throws -> [Debrief] { ... }
     
-    func getDebrief(id: String) async throws -> Debrief {
-        guard let url = URL(string: "\(baseURL)/debriefs/\(id)") else {
-            throw APIError.invalidURL
-        }
-        
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
-        let resp = try decoder.decode(DebriefAPIResponse.self, from: data)
-        return mapResponseToDomain(resp)
-    }
+    // Deprecated: Uses FirestoreService.getDebrief(userId:debriefId:) now
+    // func getDebrief(id: String) async throws -> Debrief { ... }
     
-    // Helper to avoid duplication
+    // Helper to avoid duplication (still used by createDebrief)
     private func mapResponseToDomain(_ resp: DebriefAPIResponse) -> Debrief {
         let mappedStatus: DebriefStatus = {
             switch resp.status {
@@ -163,6 +124,7 @@ class APIService {
         
         return Debrief(
             id: resp.debriefId ?? UUID().uuidString,
+            userId: Auth.auth().currentUser?.uid ?? "", // Derive from current session
             contactId: resp.contactId ?? "",
             contactName: "", // Name is resolved locally in ViewModel or by caller
             occurredAt: resp.occurredAt ?? Date(),
@@ -185,7 +147,13 @@ class APIService {
         
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue("mock_user_123", forHTTPHeaderField: "User-Id")
+        
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+             // Handle unauthenticated case, maybe throw error or proceed in some dev mode if applicable
+        }
         
         var data = Data()
         
@@ -247,7 +215,7 @@ class APIService {
     
     // MARK: - Helpers
     
-    private func performRequest<T: Decodable>(endpoint: String, method: String = "GET", body: Data? = nil, headers: [String: String] = [:]) async throws -> T {
+    func performRequest<T: Decodable>(endpoint: String, method: String = "GET", body: Data? = nil, headers: [String: String] = [:]) async throws -> T {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
@@ -259,9 +227,20 @@ class APIService {
         // Add custom headers
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            print("🔐 [APIService] Added Auth Token (Start): \(token.prefix(10))...")
+        } else {
+            print("⚠️ [APIService] No User Signed In - Missing Auth Token!")
+        }
+        
         if let body = body {
             request.httpBody = body
         }
+        
+        print("🚀 [APIService] \(method) \(endpoint)")
+        print("   headers: \(request.allHTTPHeaderFields ?? [:])")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
