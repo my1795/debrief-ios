@@ -11,6 +11,7 @@ struct DebriefDetailView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: DebriefDetailViewModel
     @State private var showDeleteConfirm = false
+    @State private var isExporting = false
     
     init(debrief: Debrief) {
         _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief))
@@ -273,7 +274,9 @@ struct DebriefDetailView: View {
     
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            ShareLink(item: viewModel.shareableText) {
+            Button {
+                isExporting = true
+            } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
                     .font(.headline)
                     .foregroundColor(.white)
@@ -281,6 +284,9 @@ struct DebriefDetailView: View {
                     .padding()
                     .background(Color(hex: "0F766E")) // teal-700
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .sheet(isPresented: $isExporting) {
+                ActivityViewController(activityItems: [viewModel.shareableText])
             }
             
             Button {
@@ -296,5 +302,17 @@ struct DebriefDetailView: View {
             }
         }
     }
+}
+
+struct ActivityViewController: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: UIViewControllerRepresentableContext<ActivityViewController>) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: UIViewControllerRepresentableContext<ActivityViewController>) {}
 }
 

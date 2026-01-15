@@ -87,13 +87,36 @@ struct StatsView: View {
                         case .overview:
                             StatsOverviewView(viewModel: viewModel)
                         case .charts:
-                            ContentUnavailableView("Coming Soon", systemImage: "chart.bar", description: Text("Detailed charts are being built."))
-                                .foregroundStyle(.white)
-                                .frame(height: 300)
+                            VStack(spacing: 12) {
+                                Image(systemName: "chart.bar")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Text("Coming Soon")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundStyle(.white)
+                                Text("Detailed charts are being built.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 300)
+                            
                         case .insights:
-                            ContentUnavailableView("Coming Soon", systemImage: "sparkles", description: Text("AI Insights are generating."))
-                                .foregroundStyle(.white)
-                                .frame(height: 300)
+                            VStack(spacing: 12) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Text("Coming Soon")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundStyle(.white)
+                                Text("AI Insights are generating.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 300)
                         }
                     }
                     .padding(.horizontal)

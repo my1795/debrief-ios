@@ -11,7 +11,7 @@ struct ContactsView: View {
     @StateObject private var viewModel = ContactsViewModel()
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 // Background
                 Color(hex: "134E4A") // Deep Teal Background
@@ -57,13 +57,35 @@ struct ContactsView: View {
                             .tint(.white)
                         Spacer()
                     } else if viewModel.contacts.isEmpty {
-                        if let error = viewModel.errorMessage {
-                            ContentUnavailableView("Access Needed", systemImage: "lock.fill", description: Text(error))
-                                .foregroundStyle(.white)
-                        } else {
-                            ContentUnavailableView("No Contacts", systemImage: "person.2.slash", description: Text("No contacts found."))
-                                .foregroundStyle(.white)
+                        VStack(spacing: 16) {
+                            Spacer()
+                            if let error = viewModel.errorMessage {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Text("Access Needed")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundStyle(.white)
+                                Text(error)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                            } else {
+                                Image(systemName: "person.2.slash")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Text("No Contacts")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundStyle(.white)
+                                Text("No contacts found.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                            Spacer()
                         }
+                        .padding()
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 12) {

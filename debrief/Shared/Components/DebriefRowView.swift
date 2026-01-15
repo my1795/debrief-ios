@@ -58,9 +58,8 @@ struct DebriefRowView: View {
                     .multilineTextAlignment(.leading)
             } else {
                 Text(debrief.transcript ?? "No summary available")
-                    .font(.subheadline)
+                    .font(.system(.subheadline, design: .default).italic())
                     .foregroundStyle(.gray.opacity(0.5))
-                    .italic()
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }

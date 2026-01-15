@@ -37,9 +37,14 @@ struct StatusBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             if showIcon {
-                Image(systemName: config.icon)
-                    .font(.system(size: 10))
-                    .symbolEffect(.pulse, isActive: status == .processing) // Animate if processing (iOS 17+)
+                if #available(iOS 17.0, *) {
+                    Image(systemName: config.icon)
+                        .font(.system(size: 10))
+                        .symbolEffect(.pulse, isActive: status == .processing)
+                } else {
+                    Image(systemName: config.icon)
+                        .font(.system(size: 10))
+                }
             }
             Text(config.label)
         }

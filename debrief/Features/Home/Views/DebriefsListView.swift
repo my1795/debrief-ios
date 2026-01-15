@@ -12,7 +12,7 @@ struct DebriefsListView: View {
     @ObservedObject var authSession: AuthSession // Passed for logout if needed (not used in HomeView UI directly but usually available)
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 // Background Gradient
                 LinearGradient(
