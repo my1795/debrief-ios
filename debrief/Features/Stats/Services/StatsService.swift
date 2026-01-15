@@ -69,6 +69,29 @@ class StatsService: StatsServiceProtocol {
     }
     
     func syncCalls(calls: [Int64]) async throws -> Int {
+        // Legacy/Direct conformance. We prefer syncPendingCalls()
+        return try await syncPendingCalls()
+    }
+    
+    // New Sync Method using Offline Storage
+    func syncPendingCalls() async throws -> Int {
+        let storage = CallStorageService.shared
+        let pending = storage.getPendingCalls()
+        
+        guard !pending.isEmpty else { return 0 }
+        
+        print("🔄 [StatsService] Syncing \(pending.count) calls...")
+        
+        let items = pending.map { record in
+            CallSyncItem(
+                timestamp: Int64(record.timestamp.timeIntervalSince1970 * 1000), // Millis
+                durationSec: Int(record.duration)
+            )
+        }
+        
+        // Use CallSyncRequest struct from StatsModels
+        let payload = CallSyncRequest(calls: items)
+        
         guard let url = URL(string: "\(baseURL)/calls/sync") else {
             throw APIError.invalidURL
         }
@@ -77,21 +100,29 @@ class StatsService: StatsServiceProtocol {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body = ["calls": calls]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        // Add Auth Token (Assuming simple Bearer if managed, or relying on session cookies/headers handled by APIService)
+        // Since we are using raw URLSession here, we might miss Auth if APIService injects it.
+        // Let's try to get headers from APIService if possible, or assume session handles it.
+        // For now, sticking to raw request as per existing pattern in this file,
+        // BUT assuming headers might be needed.
+        if let token = UserDefaults.standard.string(forKey: "auth_token") {
+             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        request.httpBody = try JSONEncoder().encode(payload)
         
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
-        struct SyncResponse: Codable {
-            let syncedCount: Int
-        }
+        let result = try JSONDecoder().decode(CallSyncResponse.self, from: data)
         
-        let decoder = JSONDecoder()
-        let result = try decoder.decode(SyncResponse.self, from: data)
+        // Success -> Clear Storage
+        storage.clearCalls(pending)
+        print("✅ [StatsService] Synced \(result.syncedCount) calls.")
+        
         return result.syncedCount
     }
 }
