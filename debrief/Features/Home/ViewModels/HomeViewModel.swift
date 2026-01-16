@@ -14,14 +14,26 @@ class HomeViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var filteredDebriefs: [Debrief] = []
     
+    // New Efficient Stats
+    struct HomeStats {
+        var todayDebriefs: Int = 0
+        var todayCalls: Int = 0
+        var todayMins: Int = 0
+    }
+    @Published var homeStats: HomeStats = HomeStats()
+    
     private let firestoreService = FirestoreService.shared
     private let contactStoreService: ContactStoreServiceProtocol
+    private let statsService: StatsServiceProtocol
     
     // Combine logic to observe UploadManager
     private var cancellables = Set<AnyCancellable>()
     
-    init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService()) {
+    init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService(), statsService: StatsServiceProtocol = StatsService()) {
         self.contactStoreService = contactStoreService
+        self.statsService = statsService
+        
+        // Observe pending uploads and re-filter list when they change
         
         // Observe pending uploads and re-filter list when they change
         DebriefUploadManager.shared.$pendingDebriefs
@@ -115,6 +127,9 @@ class HomeViewModel: ObservableObject {
                 self.debriefs = finalResult
                 self.filterDebriefs()
             }
+            
+            // Load efficient stats independently
+            await loadRealtimeStats(userId: userId)
         } catch {
             print("Failed to fetch debriefs: \(error)")
         }
@@ -142,6 +157,36 @@ class HomeViewModel: ObservableObject {
         
         // Default sort: Recent
         filteredDebriefs.sort { $0.occurredAt > $1.occurredAt }
+    }
+    
+    func loadRealtimeStats(userId: String) async {
+        let now = Date()
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: now)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        
+        async let debriefsCount = statsService.getDebriefsCount(start: startOfDay, end: endOfDay)
+        async let callsCount = statsService.getCallsCount(start: startOfDay, end: endOfDay)
+        // For duration, we might need a new method in StatsService or use FirestoreService directly if StatsService doesn't expose it.
+        // StatsService currently only has getCallsCount and getDebriefsCount.
+        // I should have checked StatsService for duration. It only has counts.
+        // I will use FirestoreService.shared.getTotalDuration for now as plan said.
+        async let durationTotal = firestoreService.getTotalDuration(userId: userId, start: startOfDay, end: endOfDay)
+        
+        do {
+            let (dCount, cCount, durationSec) = try await (debriefsCount, callsCount, durationTotal)
+            let durationMins = Int(ceil(Double(durationSec) / 60))
+            
+            await MainActor.run {
+                self.homeStats = HomeStats(
+                    todayDebriefs: dCount,
+                    todayCalls: cCount,
+                    todayMins: durationMins
+                )
+            }
+        } catch {
+            print("❌ [HomeViewModel] Failed to load daily stats: \(error)")
+        }
     }
     
 

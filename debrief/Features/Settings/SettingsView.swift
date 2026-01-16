@@ -132,7 +132,7 @@ struct SettingsView: View {
                                 .alert(isPresented: $viewModel.showClearConfirmation) {
                                     Alert(
                                         title: Text("Free Voice Space?"),
-                                        message: Text("You are using \(viewModel.storageUsedMB) MB of your \(viewModel.storageLimitMB) MB quota. This action will delete recordings from both your device and the cloud to free up space.\n\nAre you sure?"),
+                                        message: Text("You are using \(viewModel.storageUsedMB) MB of your \(viewModel.storageLimitMB) MB quota. This action will delete voice recordings from both your device and the cloud to free up space.\n\nAre you sure?"),
                                         primaryButton: .destructive(Text("Delete")) {
                                             viewModel.clearVoiceData()
                                         },
