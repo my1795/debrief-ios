@@ -47,6 +47,28 @@ struct SettingsView: View {
                             SettingsRow(icon: "person.circle.fill", title: "Profile", value: authSession.user?.email ?? "User")
                         }
                         
+                        // Sign Out Section (Separate Container)
+                        SettingsSection(title: "") {
+                            Button(action: {
+                                authSession.signOut()
+                            }) {
+                                HStack {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Sign Out")
+                                        .font(.headline)
+                                        .fontWeight(.medium)
+                                }
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .background(Color.red.opacity(0.8)) // Softer Red
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .padding(.vertical, -8) // Tighten layout within section if needed, or just let it be
+                        }
+                        
                         // Plan Section
                         SettingsSection(title: "Plan") {
                             SettingsRow(icon: "star.circle.fill", title: "Current Plan", value: viewModel.currentPlan)
@@ -127,38 +149,29 @@ struct SettingsView: View {
                             .foregroundStyle(.white.opacity(0.4))
                             .padding(.top, 8)
                         
-                        // Danger Zone (Replaces Sign Out)
+                        // Danger Zone (Delete Account Only)
                         SettingsSection(title: "Danger Zone") {
-                            Button(action: {
-                                authSession.signOut()
-                            }) {
-                                Text("Sign Out")
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(Color.gray.opacity(0.3))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                            
                             Button(action: {
                                 viewModel.showDeleteAccountWarning = true
                             }) {
                                 HStack {
                                     Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(Color.orange) // Orange Icon
                                     Text("Delete Account")
+                                        .foregroundStyle(Color.orange) // Orange Text
                                 }
-                                .font(.headline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
+                                .font(.headline.weight(.medium))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(Color.red.opacity(0.8))
+                                .background(Color.orange.opacity(0.1)) // Very light orange/reddish bg
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                )
                             }
                         }
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 100) // Extra padding for scrolling
                     }
                     .padding(.bottom, 20)
                 }
@@ -174,8 +187,7 @@ struct SettingsView: View {
                             .foregroundStyle(.red)
                         
                         Text("Delete Account?")
-                            .font(.largeTitle)
-                            .bold()
+                            .font(.largeTitle.weight(.bold))
                             .foregroundStyle(.white)
                         
                         VStack(alignment: .leading, spacing: 12) {
@@ -194,8 +206,7 @@ struct SettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         
                         Text("This action cannot be undone.\nYour data cannot be recovered.")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
+                            .font(.subheadline.weight(.bold))
                             .foregroundStyle(.red.opacity(0.8))
                             .multilineTextAlignment(.center)
                         
@@ -211,8 +222,7 @@ struct SettingsView: View {
                             }
                         }) {
                             Text("I Understand, Continue")
-                                .font(.headline)
-                                .fontWeight(.bold)
+                                .font(.headline.weight(.bold))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding()
@@ -227,7 +237,7 @@ struct SettingsView: View {
                     }
                     .padding(24)
                 }
-                .presentationDetents([.fraction(0.85)])
+                .modifier(PresentationDetentsModifier())
             }
             // Final Confirmation Input
             .alert("Final Confirmation", isPresented: $viewModel.showDeleteConfirmationInput) {
@@ -300,6 +310,19 @@ struct PrivacyBanner: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color(hex: "5EEAD4").opacity(0.3), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Compatibility Modifiers
+
+struct PresentationDetentsModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .presentationDetents([.fraction(0.85)])
+        } else {
+            content
+        }
     }
 }
 

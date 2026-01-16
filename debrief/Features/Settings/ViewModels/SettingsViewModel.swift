@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 @MainActor
 class SettingsViewModel: ObservableObject {
