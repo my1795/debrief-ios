@@ -12,6 +12,7 @@ struct DebriefDetailView: View {
     @StateObject private var viewModel: DebriefDetailViewModel
     @State private var showDeleteConfirm = false
     @State private var isExporting = false
+    @State private var showFullTranscript = false
     
     init(debrief: Debrief, userId: String) {
         _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief, userId: userId))
@@ -56,7 +57,36 @@ struct DebriefDetailView: View {
                         
                         // 3. Transcript
                         if let transcript = viewModel.debrief.transcript, !transcript.isEmpty {
-                            detailSection(title: "Transcript", content: transcript, font: .caption)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Transcript")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                
+                                Text(transcript)
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .lineSpacing(4)
+                                    .lineLimit(5) // Preview limit
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                Button(action: { showFullTranscript = true }) {
+                                    HStack(spacing: 4) {
+                                        Text("Read Full Transcript")
+                                            .font(.caption.bold())
+                                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(Color.teal)
+                                    .padding(.top, 4)
+                                }
+                            }
+                            .padding()
+                            .background(.white.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+                            .onTapGesture {
+                                showFullTranscript = true
+                            }
                         }
                         
                         // 4. Audio Player
@@ -88,6 +118,11 @@ struct DebriefDetailView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This action cannot be undone.")
+        }
+        .fullScreenCover(isPresented: $showFullTranscript) {
+            if let transcript = viewModel.debrief.transcript {
+                TranscriptFullScreenView(transcript: transcript)
+            }
         }
     }
     
@@ -336,6 +371,46 @@ struct ExpandableText: View {
                 }
                 .foregroundStyle(Color.teal) // Using teal theme
                 .padding(.top, 4)
+            }
+        }
+    }
+}
+
+struct TranscriptFullScreenView: View {
+    let transcript: String
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        ZStack {
+            // Background
+            Color(hex: "134E4A").ignoresSafeArea() // Matching theme background
+            
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Transcript")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white.opacity(0.6), .white.opacity(0.1))
+                    }
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+                
+                // Content
+                ScrollView {
+                    Text(transcript)
+                        .font(.body) // Larger font for reading
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineSpacing(6)
+                        .padding()
+                        .textSelection(.enabled) // Allow copying
+                }
             }
         }
     }
