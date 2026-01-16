@@ -47,9 +47,8 @@ struct StatsOverview {
     let totalActionItems: Int // Not in OverviewResponse, might need separate call or mock for now
     let totalContacts: Int    // Not in OverviewResponse
     let avgDebriefDuration: Double
-    let completionRate: Int   // Mock for now
-    let mostActiveDay: String // Mock for now
-    let longestStreak: Int    // Mock for now
+    let mostActiveDay: String
+    let longestStreak: Int
 }
 
 struct StatsTrends {
@@ -105,7 +104,6 @@ extension StatsOverview {
         totalActionItems: 0,
         totalContacts: 0,
         avgDebriefDuration: 0,
-        completionRate: 0,
         mostActiveDay: "-",
         longestStreak: 0
     )

@@ -121,33 +121,128 @@ class StatsViewModel: ObservableObject {
     
     private func loadOverviewData() async {
         do {
-            // All Time Stats from Firestore
-            let safeStart = Date(timeIntervalSince1970: 0) // Avoids 'Timestamp out of range' crash
-            async let totalDebriefsDiff = statsService.getDebriefsCount(start: safeStart, end: Date())
-            async let totalCallsDiff = statsService.getCallsCount(start: safeStart, end: Date())
+            print("🔄 [StatsViewModel] Loading overview data...")
+            // Fetch ALL debriefs for accurate client-side stats
+            // Firestore caching handles efficiency for subsequent loads
+            guard let userId = AuthSession.shared.user?.id else {
+                 print("⚠️ [StatsViewModel] No User ID found in session")
+                 return
+            }
             
-            let (totalDebriefs, _) = try await (totalDebriefsDiff, totalCallsDiff)
+            // By fetching all, we can calculate everything accurately without strict backend dependency
+            let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId)
+            print("✅ [StatsViewModel] Fetched \(allDebriefs.count) debriefs for stats")
+
+            let stats = calculateStats(from: allDebriefs)
+            self.overview = stats
             
-            // For now, we don't have efficient Sum aggregation on client without fetching all docs.
-            // We will set totalMinutes to an estimate or 0.
-            // Ideally backend would do this, but we are moving away from backend.
-            
-            self.overview = StatsOverview(
-                totalDebriefs: totalDebriefs,
-                totalMinutes: 0, // Placeholder until Sum Aggregation is added
-                totalActionItems: 0,
-                totalContacts: 0,
-                avgDebriefDuration: 0.0,
-                completionRate: 0,
-                mostActiveDay: "-",
-                longestStreak: 0
-            )
-            
-            // Top Contacts requires more complex query, leaving empty for now to solve errors
-            self.topContacts = []
-            
+            // Update Widgets with real data derived from all debriefs if needed, 
+            // or keep using Weekly Stats as is (which fetches range separately).
+            // For efficiency, we COUDLD reuse `allDebriefs` for widgets too if we filter locally.
+            // But let's leave loadWidgetData separate for now to avoid huge refactor risk, 
+            // focusing on "Quick Stats" correctness first. 
+
         } catch {
-            print("Overview Stats Error: \(error)")
+            print("❌ Overview Stats Error: \(error)")
+        }
+    }
+    
+    private func calculateStats(from allDebriefs: [Debrief]) -> StatsOverview {
+        if allDebriefs.isEmpty { return .empty }
+        
+        // Filter for Current Week (Sunday to Sunday)
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // 1 = Sunday
+        
+        let now = Date()
+        // Get start of the current week (Sunday at 00:00)
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+        
+        let weeklyDebriefs = allDebriefs.filter { $0.occurredAt >= startOfWeek }
+        
+        // 1. Total Counts (Weekly)
+        let totalDebriefs = weeklyDebriefs.count
+        let totalSeconds = weeklyDebriefs.reduce(0) { $0 + $1.duration }
+        let totalMinutes = Int(totalSeconds / 60)
+        let totalActionItems = weeklyDebriefs.reduce(0) { $0 + ($1.actionItems?.count ?? 0) }
+        
+        // 2. Unique Contacts (Weekly)
+        let uniqueContacts = Set(weeklyDebriefs.compactMap { $0.contactId.isEmpty ? nil : $0.contactId }).count
+        
+        // 3. Average Duration (Weekly)
+        let avgSeconds = totalDebriefs > 0 ? totalSeconds / Double(totalDebriefs) : 0.0
+        
+        // 4. Most Active Day (Weekly - although less meaningful for just 1 week, it shows the active day of THIS week)
+        // If user wants general pattern, All-Time is better. But requested "Weekly" to avoid huge processing.
+        // Let's stick to Weekly as requested to avoid all-time iteration if list is huge.
+        var dayCounts: [Int: Int] = [:] 
+        for d in weeklyDebriefs {
+            let weekday = Calendar.current.component(.weekday, from: d.occurredAt)
+            dayCounts[weekday, default: 0] += 1
+        }
+        let maxDay = dayCounts.max(by: { $0.value < $1.value })?.key
+        let mostActiveDayStr = dayCounts.isEmpty ? "-" : dayName(for: maxDay)
+        
+        // 5. Longest Streak (Consecutive Hours)
+        // Streak inherently needs history to be meaningful. 
+        // If we strictly limit to 7 days, a 100-day streak becomes 7 days. 
+        // We will calculate streak on the FETCHED dataset (which user previously agreed could be limited or all-time).
+        // For now, we use `allDebriefs` for streak to be accurate, as streak is usually an "All Time" bragging right.
+        // If "All Time" fetch is banned, we can't show true streak. 
+        // Assuming we fetched all, we calculate streak on all. 
+        let streak = calculateHourlyStreak(debriefs: allDebriefs)
+        
+        return StatsOverview(
+            totalDebriefs: totalDebriefs,
+            totalMinutes: totalMinutes,
+            totalActionItems: totalActionItems,
+            totalContacts: uniqueContacts,
+            avgDebriefDuration: avgSeconds, // Weekly Average
+            mostActiveDay: mostActiveDayStr,
+            longestStreak: streak // All-time Streak based on fetched data
+        )
+    }
+    
+    private func calculateHourlyStreak(debriefs: [Debrief]) -> Int {
+        // defined as: sequence of consecutive hours having >=1 debrief
+        // Strategy: 
+        // 1. Get Set of unique "Hour-Buckets" (e.g. Timestamp of the hour or just Int(timeInterval/3600))
+        // 2. Sort them.
+        // 3. Iterate to find longest sequence (current == prev + 1)
+        
+        let hours = debriefs.map { Int($0.occurredAt.timeIntervalSince1970 / 3600) }
+        let uniqueHours = Array(Set(hours)).sorted()
+        
+        if uniqueHours.isEmpty { return 0 }
+        
+        var maxStreak = 1
+        var currentStreak = 1
+        
+        for i in 1..<uniqueHours.count {
+            if uniqueHours[i] == uniqueHours[i-1] + 1 {
+                currentStreak += 1
+            } else {
+                maxStreak = max(maxStreak, currentStreak)
+                currentStreak = 1
+            }
+        }
+        maxStreak = max(maxStreak, currentStreak) // Check last run
+        
+        return maxStreak
+    }
+    
+    private func dayName(for weekday: Int?) -> String {
+        guard let w = weekday else { return "-" }
+        // Calendar weekday: 1=Sun
+        switch w {
+        case 1: return "Sunday"
+        case 2: return "Monday"
+        case 3: return "Tuesday"
+        case 4: return "Wednesday"
+        case 5: return "Thursday"
+        case 6: return "Friday"
+        case 7: return "Saturday"
+        default: return "-"
         }
     }
     

@@ -63,7 +63,7 @@ struct StatsOverviewView: View {
                         value: stat.value,
                         icon: stat.icon,
                         trendString: stat.subValue,
-                        infoText: nil
+                        infoText: getInfoText(for: stat.title)
                     )
                 }
             }
@@ -75,10 +75,38 @@ struct StatsOverviewView: View {
                     .foregroundStyle(.white)
                 
                 VStack(spacing: 12) {
-                    QuickStatRow(icon: "clock", color: .teal, title: "Avg Duration", value: "\(viewModel.overview.avgDebriefDuration) min")
-                    QuickStatRow(icon: "target", color: .green, title: "Completion Rate", value: "\(viewModel.overview.completionRate)%")
-                    QuickStatRow(icon: "calendar", color: .orange, title: "Most Active Day", value: viewModel.overview.mostActiveDay)
-                    QuickStatRow(icon: "flame.fill", color: .red, title: "Longest Streak", value: "\(viewModel.overview.longestStreak) days")
+                    QuickStatRow(
+                        icon: "clock",
+                        color: .teal,
+                        title: "Avg Duration",
+                        value: formatAvgDuration(viewModel.overview.avgDebriefDuration),
+                        subtitle: "Per Debrief (This Week)",
+                        infoText: "Average length of your debriefs recorded this week."
+                    )
+                    QuickStatRow(
+                        icon: "checklist", // Tasks icon
+                        color: .green,
+                        title: "Tasks Created",
+                        value: "\(viewModel.overview.totalActionItems)",
+                        subtitle: "Action Items (This Week)",
+                        infoText: "Total number of action items automatically extracted from your debriefs this week."
+                    )
+                    QuickStatRow(
+                        icon: "calendar",
+                        color: .orange,
+                        title: "Most Active Day",
+                        value: viewModel.overview.mostActiveDay,
+                        subtitle: "This Week",
+                        infoText: "The day of the week you recorded the most debriefs."
+                    )
+                    QuickStatRow(
+                        icon: "flame.fill",
+                        color: .red,
+                        title: "Longest Streak",
+                        value: "\(viewModel.overview.longestStreak) hrs",
+                        subtitle: "Consecutive Hours",
+                        infoText: "The longest sequence of consecutive hours where you recorded at least one debrief."
+                    )
                 }
             }
             .padding()
@@ -188,6 +216,27 @@ struct StatsOverviewView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1), lineWidth: 1))
         }
     }
+    func getInfoText(for title: String) -> String {
+        switch title {
+        case "Total Debriefs": return "Total number of debriefs recorded this week."
+        case "Duration per Week": return "Total duration of all debriefs recorded this week."
+        case "Action Items": return "Total number of action items identified in your debriefs this week."
+        case "Active Contacts": return "Number of unique people you have debriefed about this week."
+        default: return "Weekly statistic comparison."
+        }
+    }
+    
+    func formatAvgDuration(_ seconds: Double) -> String {
+        if seconds < 60 {
+            return "\(Int(seconds)) sec"
+        } else if seconds < 600 { // 10 minutes * 60
+             let minutes = Int(seconds) / 60
+             let secs = Int(seconds) % 60
+             return String(format: "%d:%02d min", minutes, secs)
+        } else {
+            return "\(Int(round(seconds / 60))) min"
+        }
+    }
 }
 
 // MARK: - Subviews
@@ -267,6 +316,7 @@ struct MetricCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 150) // Fixed height to ensure all cards are equal
         .background(.white.opacity(0.1))
         .background(Material.ultraThin)
         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -279,6 +329,9 @@ struct QuickStatRow: View {
     let color: Color
     let title: String
     let value: String
+    var subtitle: String? = nil
+    var infoText: String? = nil
+    @State private var showInfo = false
     
     var body: some View {
         HStack {
@@ -291,9 +344,30 @@ struct QuickStatRow: View {
                         .font(.caption.bold())
                         .foregroundStyle(color)
                 }
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(title)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.8))
+                        
+                        if let info = infoText {
+                            Button(action: { showInfo.toggle() }) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .alert(isPresented: $showInfo) {
+                                Alert(title: Text(title), message: Text(info), dismissButton: .default(Text("OK")))
+                            }
+                        }
+                    }
+                    
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
             }
             Spacer()
             Text(value)
