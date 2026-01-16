@@ -7,12 +7,47 @@
 
 import Foundation
 import FirebaseFirestore
+import Combine
 
 class FirestoreService {
     static let shared = FirestoreService()
     private let db = Firestore.firestore()
     
     private init() {}
+    
+    // MARK: - Quota Observation (Real-time)
+    
+    func observeQuota(userId: String) -> AnyPublisher<UserQuota, Error> {
+        let subject = PassthroughSubject<UserQuota, Error>()
+        
+        let listener = db.collection("user_quotas")
+            .whereField("userId", isEqualTo: userId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    subject.send(completion: .failure(error))
+                    return
+                }
+                
+                guard let document = snapshot?.documents.first else {
+                    return
+                }
+                
+                print("🔍 [FirestoreService] Quota Document ID: \(document.documentID)")
+                
+                do {
+                    let quota = try document.data(as: UserQuota.self)
+                    subject.send(quota)
+                } catch {
+                    subject.send(completion: .failure(error))
+                }
+            }
+        
+        return subject
+            .handleEvents(receiveCancel: {
+                listener.remove()
+            })
+            .eraseToAnyPublisher()
+    }
     
     func fetchDebriefs(userId: String) async throws -> [Debrief] {
         let snapshot = try await db.collection("debriefs")

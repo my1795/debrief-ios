@@ -130,14 +130,16 @@ struct StatsOverviewView: View {
                         title: "Recordings",
                         current: viewModel.quota.recordingsThisMonth,
                         limit: viewModel.quota.recordingsLimit,
-                        percent: viewModel.recordingsQuotaPercent
+                        percent: viewModel.recordingsQuotaPercent,
+                        subLabel: "this week"
                     )
                     
                     QuotaRow(
                         title: "Minutes",
                         current: viewModel.quota.minutesThisMonth,
                         limit: viewModel.quota.minutesLimit,
-                        percent: viewModel.minutesQuotaPercent
+                        percent: viewModel.minutesQuotaPercent,
+                        subLabel: "min this week"
                     )
                     
                     QuotaRow(
@@ -383,6 +385,7 @@ struct QuotaRow: View {
     let limit: Int
     let percent: Double
     var unit: String = ""
+    var subLabel: String? = nil // e.g. "this week"
     
     var body: some View {
         VStack(spacing: 8) {
@@ -391,7 +394,7 @@ struct QuotaRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.8))
                 Spacer()
-                Text("\(current) / \(limit) \(unit)")
+                Text("\(current) / \(limit) \(unit)\(subLabel != nil ? " " + subLabel! : "")")
                     .font(.subheadline.bold())
                     .foregroundStyle(.white)
             }

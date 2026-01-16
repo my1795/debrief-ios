@@ -11,6 +11,51 @@ import Foundation
 
 // MARK: - API Response Models
 
+struct UserQuota: Codable {
+    let userId: String
+    let subscriptionTier: String // "FREE", "PERSONAL", "PRO"
+    
+    // Limits
+    let weeklyDebriefs: Int
+    let weeklyRecordingMinutes: Int
+    let storageLimitMB: Int
+    
+    // Usage
+    let usedDebriefs: Int
+    let usedRecordingSeconds: Int
+    let usedStorageMB: Int
+    
+    // Period
+    // Backend sends timestamps as Int64 milliseconds (e.g. 1767225600000)
+    let currentPeriodStart: Int64?
+    let currentPeriodEnd: Int64?
+    
+    // Helper to handle optional/missing fields safely if needed (though Codable requires them if not nullable)
+    // Assuming backend ALWAYS sends these. If not, we should use Optionals with defaults.
+    // Based on contract, they seem required.
+}
+
+extension UserQuota {
+    var usedRecordingMinutes: Int {
+        // Round up: 1 sec usage = 1 min quota used
+        Int(ceil(Double(usedRecordingSeconds) / 60.0))
+    }
+    
+    var periodStartDate: Date? {
+        guard let ms = currentPeriodStart else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+    }
+    
+    var periodEndDate: Date? {
+        guard let ms = currentPeriodEnd else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+    }
+    
+    var isUnlimitedDebriefs: Bool { weeklyDebriefs == Int.max }
+    var isUnlimitedMinutes: Bool { weeklyRecordingMinutes == Int.max }
+    var isUnlimitedStorage: Bool { storageLimitMB == Int.max }
+}
+
 struct CallCountResponse: Codable {
     let count: Int
 }
@@ -124,6 +169,16 @@ extension StatsTrends {
 }
 
 extension StatsQuota {
+    static let empty = StatsQuota(
+        tier: "-",
+        recordingsThisMonth: 0,
+        recordingsLimit: 10,
+        minutesThisMonth: 0,
+        minutesLimit: 100,
+        storageUsedMB: 0,
+        storageLimitMB: 500
+    )
+
     static let mock = StatsQuota(
         tier: "Free",
         recordingsThisMonth: 8,

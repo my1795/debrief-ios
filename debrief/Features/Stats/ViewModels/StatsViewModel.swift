@@ -24,7 +24,7 @@ class StatsViewModel: ObservableObject {
     @Published var stats: [StatsDisplayData] = []
     @Published var overview: StatsOverview = .empty
     @Published var trends: StatsTrends = .empty // Started with empty as requested
-    @Published var quota: StatsQuota = .mock // Keep Quota mock for now
+    @Published var quota: StatsQuota = .empty
     @Published var topContacts: [TopContactStat] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -41,6 +41,7 @@ class StatsViewModel: ObservableObject {
     ]
     
     private let statsService: StatsServiceProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     init(statsService: StatsServiceProtocol = StatsService()) {
         self.statsService = statsService
@@ -51,12 +52,53 @@ class StatsViewModel: ObservableObject {
         errorMessage = nil
         print("📊 [StatsViewModel] Starting loadData...") // LOGGING
         
+        // Start Real-time Quota Observation
+        if let userId = AuthSession.shared.user?.id {
+            startObservingQuota(userId: userId)
+        }
+        
         await loadWidgetData()
         await loadOverviewData()
         
         isLoading = false
     }
     
+    private func startObservingQuota(userId: String) {
+        FirestoreService.shared.observeQuota(userId: userId)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    print("❌ [StatsViewModel] Quota observation error: \(error)")
+                    // Keep existing quota or show error state if needed
+                }
+            }, receiveValue: { [weak self] newQuota in
+                print("⚡️ [StatsViewModel] Received real-time quota update")
+                // Map UserQuota (Domain Model) to StatsQuota (View Model) 
+                // Currently StatsQuota seems to be a separate struct in StatsModels.
+                // We need to map it. Assuming UserQuota properties match mostly.
+                // Let's create a mapper or manual map.
+                self?.quota = self?.mapToStatsQuota(newQuota) ?? .mock
+            })
+            .store(in: &cancellables)
+    }
+    
+    // Helper to map Domain UserQuota to View Model StatsQuota
+    private func mapToStatsQuota(_ userQuota: UserQuota) -> StatsQuota {
+        // Assuming UserQuota has similar fields. If UserQuota definition isn't visible, 
+        // I'll infer based on typical naming.
+        // Debug Log
+        print("🔍 [StatsViewModel] Mapping Quota - Seconds: \(userQuota.usedRecordingSeconds) -> Minutes: \(userQuota.usedRecordingMinutes)")
+        
+        return StatsQuota(
+            tier: userQuota.subscriptionTier,
+            recordingsThisMonth: userQuota.usedDebriefs,
+            recordingsLimit: userQuota.weeklyDebriefs,
+            minutesThisMonth: userQuota.usedRecordingMinutes,
+            minutesLimit: userQuota.weeklyRecordingMinutes,
+            storageUsedMB: userQuota.usedStorageMB,
+            storageLimitMB: userQuota.storageLimitMB
+        )
+    }
     private func loadWidgetData() async {
         do {
             let (thisWeekStart, thisWeekEnd) = weekBounds(for: Date())
