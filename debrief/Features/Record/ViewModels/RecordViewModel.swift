@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import Contacts
+import UserNotifications
 
 enum RecordingState {
     case recording
@@ -18,8 +19,7 @@ enum RecordingState {
 
 @MainActor
 class RecordViewModel: ObservableObject {
-    // MARK: - Published State
-    // MARK: - Published State
+    // ... (Existing properties) ...
     // MARK: - Published State
     @Published var state: RecordingState = .recording
     @Published var recordingTime: TimeInterval = 0
@@ -41,10 +41,13 @@ class RecordViewModel: ObservableObject {
         return grouped.sorted { $0.key < $1.key }
     }
     
+    // ... (Existing Dependencies) ...
     // MARK: - Dependencies
     private let recorderService: AudioRecorderServiceProtocol
     private let apiService = APIService.shared
     private let contactStoreService: ContactStoreServiceProtocol
+    
+    // ... (Existing Init) ...
     
     // MARK: - Internal State
     private var recordedFileURL: URL?
@@ -58,11 +61,16 @@ class RecordViewModel: ObservableObject {
         
         setupContactObserver()
         
+        // Request Notification Permissions lazily
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        
         Task {
             await fetchContacts()
             await startRecording()
         }
     }
+    
+    // MARK: - Helper Methods
     
     private func setupContactObserver() {
         contactStoreObserver = NotificationCenter.default.addObserver(
@@ -91,8 +99,6 @@ class RecordViewModel: ObservableObject {
             print("Failed to fetch contacts: \(error)")
         }
     }
-    
-    // MARK: - Recording Actions
     
     func startRecording() async {
         let granted = await recorderService.requestPermission()
@@ -143,8 +149,6 @@ class RecordViewModel: ObservableObject {
         selectedContact = contact
     }
     
-
-    
     // MARK: - Processing Actions
     
     func saveDebrief(onComplete: @escaping () -> Void) {
@@ -155,6 +159,10 @@ class RecordViewModel: ObservableObject {
             do {
                 let _ = try await apiService.createDebrief(audioUrl: url, contactId: contact.id, duration: recordingTime)
                 state = .complete
+                
+                // Check Quota after success
+                await checkStorageLimit()
+                
                 try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
                 onComplete()
             } catch {
@@ -163,6 +171,46 @@ class RecordViewModel: ObservableObject {
                 state = .complete
                 try? await Task.sleep(nanoseconds: 1 * 1_000_000_000)
                 onComplete()
+            }
+        }
+    }
+    
+    private func checkStorageLimit() async {
+        guard let userId = AuthSession.shared.user?.id else { return }
+        
+        do {
+            let quota = try await FirestoreService.shared.getUserQuota(userId: userId)
+            
+            // Logic: Warn if used >= 450 MB (User Requirement)
+            let limitThreshold = 450
+            let hasWarnedKey = "hasWarnedStorageLimit"
+            
+            if quota.usedStorageMB >= limitThreshold {
+                if !UserDefaults.standard.bool(forKey: hasWarnedKey) {
+                    sendStorageNotification()
+                    UserDefaults.standard.set(true, forKey: hasWarnedKey)
+                }
+            } else {
+                // Reset warning if space is cleared below threshold
+                UserDefaults.standard.set(false, forKey: hasWarnedKey)
+            }
+            
+        } catch {
+            print("Failed to check quota logic: \(error)")
+        }
+    }
+    
+    private func sendStorageNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Storage Almost Full"
+        content.body = "You have reached 450MB of storage. Upgrade your plan or free up voice space to continue."
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: "storage_warning", content: content, trigger: nil) // Deliver immediately
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error showing notification: \(error)")
             }
         }
     }

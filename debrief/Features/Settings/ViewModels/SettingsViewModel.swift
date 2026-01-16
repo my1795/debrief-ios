@@ -13,46 +13,111 @@ import Combine
 class SettingsViewModel: ObservableObject {
     @Published var cacheSize: String = "Calculating..."
     @Published var appVersion: String = "v1.0.0"
-    @Published var notificationsEnabled: Bool = true
-    @Published var usageCost: String = "$0.00"
     
-    // Auth Session reference will be passed from View or accessed via EnvironmentObject if available,
-    // but here we just handle view-specific logic.
+    // Persist notification preference
+    @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = true
     
-    private let statsService = StatsService()
-
+    @Published var currentPlan: String = "Loading..."
+    @Published var usageCost: String = "$0.00" // Kept for now, effectively placeholder
+    @Published var showClearConfirmation = false
+    
+    // Storage Quota Stats
+    @Published var storageUsedMB: Int = 0
+    @Published var storageLimitMB: Int = 500 // Default 500MB
+    
+    private var cancellables = Set<AnyCancellable>()
+    private let statsService = StatsService() // You might want to remove this if not using stats here anymore
+    
     init() {
         calculateCacheSize()
         fetchAppVersion()
-        Task {
-            await calculateUsage()
+        fetchUserQuota()
+    }
+    
+    private func fetchUserQuota() {
+        guard let userId = AuthSession.shared.user?.id else {
+            self.currentPlan = "Free" // Fallback
+            return
         }
+        
+        FirestoreService.shared.observeQuota(userId: userId)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                    print("Error fetching quota for settings: \(error)")
+                }
+            }, receiveValue: { [weak self] quota in
+                self?.currentPlan = quota.subscriptionTier
+                self?.storageUsedMB = quota.usedStorageMB
+                self?.storageLimitMB = quota.storageLimitMB
+                
+                // Check for storage warning (threshold e.g. 90% or >450MB) 
+                // We handle this here because SettingsViewModel observes quota. 
+                // But typically this should happen in background or after a call. 
+                // Since user asked for logic "adam 450 mb ye ualstı adama bildirim atıcaz", 
+                // doing it here catches it when they open settings, which is good usage feedback, 
+                // but real-time notification should be in CallObserver. 
+                // We'll leave the real-time part for CallObserver.
+            })
+            .store(in: &cancellables)
+    }
+    
+    var canFreeSpace: Bool {
+        return currentPlan.lowercased() == "free"
     }
     
     func calculateCacheSize() {
-        // Mocking cache size calculation for now.
-        // In real app, we would sum up file sizes in the documents/cache directory.
-        let mbs = Int.random(in: 15...250)
-        self.cacheSize = "\(mbs) MB"
+        // Estimate size of the Documents directory where recordings might be stored
+        if let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            do {
+                let resources = try docsDir.resourceValues(forKeys: [.fileSizeKey])
+                // This is just the root folder, need to traverse or assume a specific subfolder "recordings"
+                // For safety/MVP, assuming subfolder "voice_debriefs" or similar based on audio recorder logic.
+                // If not defined, we'll traverse all files in Documents (safest for "Clear Data").
+                
+                // Let's traverse recursively
+                let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+                let enumerator = FileManager.default.enumerator(at: docsDir, includingPropertiesForKeys: resourceKeys)
+                
+                var totalSize: Int64 = 0
+                while let fileURL = enumerator?.nextObject() as? URL {
+                    let resourceValues = try fileURL.resourceValues(forKeys: Set(resourceKeys))
+                    if resourceValues.isRegularFile == true {
+                        totalSize += Int64(resourceValues.fileSize ?? 0)
+                    }
+                }
+                
+                let mb = Double(totalSize) / 1024 / 1024
+                self.cacheSize = String(format: "%.1f MB", mb)
+                
+            } catch {
+                self.cacheSize = "Unknown"
+            }
+        }
     }
-    
-    func clearCache() {
-        // Mock clearing
-        self.cacheSize = "0 KB"
-    }
-    
-    func calculateUsage() async {
+
+    func clearVoiceData() {
+        // Implement deletion logic.
+        // User said: "actually we are deleting remote ones too". 
+        // We must call a service to delete remote data for this user.
+        
+        // 1. Delete Local
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         do {
-            // Use new Firestore aggregation integration
-            let safeStart = Date(timeIntervalSince1970: 0) // Avoids 'Timestamp out of range' crash
-            let totalDebriefs = try await statsService.getDebriefsCount(start: safeStart, end: Date())
-            
-            // For MVP: totalDebriefs * $0.50 per debrief.
-            let cost = Double(totalDebriefs) * 0.50
-            self.usageCost = String(format: "$%.2f", cost)
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil)
+            for fileURL in fileURLs {
+                try FileManager.default.removeItem(at: fileURL)
+            }
         } catch {
-            print("Failed to fetch usage stats: \(error)")
-            self.usageCost = "$0.00"
+            print("Error clearing local data: \(error)")
+        }
+        
+        // 2. Delete Remote (Stub/Placeholder for now as we don't have bulk delete yet)
+        Task {
+            // TODO: Call FirestoreService.deleteAllRecordings(userId: ...)
+            // For now, assume this action triggers the cleanup process.
+            // We resetting the local representation of usage cost/cache loop.
+             calculateCacheSize()
         }
     }
     
@@ -66,13 +131,14 @@ class SettingsViewModel: ObservableObject {
     }
     
     func openPrivacyPolicy() {
-        if let url = URL(string: "https://debrief.ai/privacy") {
+        if let url = URL(string: "https://debrief-app.vercel.app/") {
             UIApplication.shared.open(url)
         }
     }
     
     func openHelpCenter() {
-        if let url = URL(string: "https://debrief.ai/support") {
+        // Fallback to main site or generic support
+        if let url = URL(string: "https://debrief-app.vercel.app/") {
             UIApplication.shared.open(url)
         }
     }

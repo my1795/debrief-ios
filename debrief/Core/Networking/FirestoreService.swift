@@ -49,6 +49,32 @@ class FirestoreService {
             .eraseToAnyPublisher()
     }
     
+    // One-shot fetch for quota logic (e.g. checks after recording)
+    func getUserQuota(userId: String) async throws -> UserQuota {
+        let snapshot = try await db.collection("user_quotas")
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        guard let doc = snapshot.documents.first else {
+            // Return default/mock if not found
+            // Correct order based on struct definition:
+            // userId, subscriptionTier, weeklyDebriefs, weeklyRecordingMinutes, storageLimitMB, usedDebriefs, usedRecordingSeconds, usedStorageMB, currentPeriodStart, currentPeriodEnd
+            return UserQuota(
+                userId: userId,
+                subscriptionTier: "Free",
+                weeklyDebriefs: 5,
+                weeklyRecordingMinutes: 10,
+                storageLimitMB: 500,
+                usedDebriefs: 0,
+                usedRecordingSeconds: 0,
+                usedStorageMB: 0,
+                currentPeriodStart: nil,
+                currentPeriodEnd: nil
+            )
+        }
+        
+        return try doc.data(as: UserQuota.self)
+    }
     func fetchDebriefs(userId: String) async throws -> [Debrief] {
         let snapshot = try await db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)

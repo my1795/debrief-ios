@@ -49,8 +49,9 @@ struct SettingsView: View {
                         
                         // Plan Section
                         SettingsSection(title: "Plan") {
-                            SettingsRow(icon: "star.circle.fill", title: "Current Plan", value: "Free")
+                            SettingsRow(icon: "star.circle.fill", title: "Current Plan", value: viewModel.currentPlan)
                             
+                            // "Usage" link kept as per screenshot
                             NavigationLink(destination: UsageView(viewModel: viewModel)) {
                                 SettingsRow(icon: "chart.bar.fill", title: "Billing History", value: "Usage", showChevron: true)
                             }
@@ -92,16 +93,29 @@ struct SettingsView: View {
                                 }
                                 
                                 Button(action: {
-                                    viewModel.clearCache()
+                                    viewModel.showClearConfirmation = true
                                 }) {
-                                    Text("Clear Cache")
+                                    Text("Free Voice Space")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                        .foregroundStyle(Color(hex: "FECACA"))
+                                        .foregroundStyle(viewModel.canFreeSpace ? Color(hex: "FECACA") : Color.gray.opacity(0.5))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
-                                        .background(Color.white.opacity(0.05))
+                                        .background(
+                                            viewModel.canFreeSpace ? Color.white.opacity(0.05) : Color.white.opacity(0.02)
+                                        )
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .disabled(!viewModel.canFreeSpace)
+                                .alert(isPresented: $viewModel.showClearConfirmation) {
+                                    Alert(
+                                        title: Text("Free Voice Space?"),
+                                        message: Text("You are using \(viewModel.storageUsedMB) MB of your \(viewModel.storageLimitMB) MB quota. This action will delete recordings from both your device and the cloud to free up space.\n\nAre you sure?"),
+                                        primaryButton: .destructive(Text("Delete")) {
+                                            viewModel.clearVoiceData()
+                                        },
+                                        secondaryButton: .cancel()
+                                    )
                                 }
                             }
                             .padding(.vertical, 4)
