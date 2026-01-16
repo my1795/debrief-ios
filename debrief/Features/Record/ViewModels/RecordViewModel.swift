@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import FirebaseFirestore
 import Contacts
 import UserNotifications
 
@@ -26,6 +27,7 @@ class RecordViewModel: ObservableObject {
     @Published var selectedContact: Contact?
     @Published var searchQuery: String = ""
     @Published var contacts: [Contact] = []
+    @Published var processingStatusMessage: String = "Uploading..."
     
     // Derived state for UI
     var groupedContacts: [(key: String, value: [Contact])] {
@@ -151,28 +153,27 @@ class RecordViewModel: ObservableObject {
     
     // MARK: - Processing Actions
     
+    // Listener Registration
+    private var debriefListener: ListenerRegistration?
+    
     func saveDebrief(onComplete: @escaping () -> Void) {
         guard let url = recordedFileURL, let contact = selectedContact else { return }
-        state = .processing
         
+        // 1. Fire-and-Forget via Singleton Manager
+        DebriefUploadManager.shared.save(audioUrl: url, contact: contact, duration: recordingTime)
+        
+        // 2. Instant Dismissal
+        onComplete()
+        
+        // 3. Check Quota (Side Effect - still good to trigger here or in manager)
         Task {
-            do {
-                let _ = try await apiService.createDebrief(audioUrl: url, contactId: contact.id, duration: recordingTime)
-                state = .complete
-                
-                // Check Quota after success
-                await checkStorageLimit()
-                
-                try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
-                onComplete()
-            } catch {
-                print("Upload failed: \(error)")
-                try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
-                state = .complete
-                try? await Task.sleep(nanoseconds: 1 * 1_000_000_000)
-                onComplete()
-            }
+           await checkStorageLimit()
         }
+    }
+    
+    private func handleError() {
+        state = .complete // Or error state if UI supports it
+        // Could show toast/alert here
     }
     
     private func checkStorageLimit() async {
@@ -224,6 +225,7 @@ class RecordViewModel: ObservableObject {
     
     deinit {
         timerTask?.cancel()
+        debriefListener?.remove()
         if let observer = contactStoreObserver {
             NotificationCenter.default.removeObserver(observer)
         }

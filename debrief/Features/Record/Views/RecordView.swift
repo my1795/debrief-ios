@@ -31,10 +31,9 @@ struct RecordView: View {
                     recordingView
                 case .selectContact:
                     selectContactView
-                case .processing:
-                    processingView
-                case .complete:
-                    completeView
+                case .processing, .complete:
+                    // Should dismiss immediately, but show minimal loader just in case
+                    ProgressView()
                 }
             }
         }
@@ -211,35 +210,7 @@ struct RecordView: View {
         }
     }
     
-    var processingView: some View {
-        VStack {
-            ProgressView()
-                .scaleEffect(2)
-                .tint(AppTheme.Colors.accent)
-                .padding(.bottom, 24)
-            
-            Text("Processing...")
-                .font(.title2)
-                .foregroundColor(.white)
-            Text("Uploading and processing your debrief")
-                .foregroundColor(.white.opacity(0.7))
-        }
-    }
-    
-    var completeView: some View {
-        VStack {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(Color.green)
-                .padding(.bottom, 24)
-            
-            Text("Complete!")
-                .font(.title2)
-                .foregroundColor(.white)
-            Text("Your debrief has been saved")
-                .foregroundColor(.white.opacity(0.7))
-        }
-    }
+
     
     func formatTime(_ seconds: Int) -> String {
         let min = seconds / 60

@@ -106,9 +106,22 @@ class DebriefDetailViewModel: ObservableObject {
             do {
                 try await apiService.deleteDebrief(id: debrief.id)
                 audioService.stop() // Stop audio if deleting
+                
+                // Notify app
+                NotificationCenter.default.post(name: .didDeleteDebrief, object: nil, userInfo: ["debriefId": debrief.id])
+                
                 completion()
             } catch {
                 print("❌ Error deleting debrief: \(error)")
+                
+                // If it was already failed/local, or 404, we should remove it locally anyway
+                if debrief.status == .failed {
+                    print("⚠️ Force removing failed debrief locally")
+                    NotificationCenter.default.post(name: .didDeleteDebrief, object: nil, userInfo: ["debriefId": debrief.id])
+                    completion()
+                    return
+                }
+                
                 self.errorMessage = "Failed to delete debrief"
                 isDeleting = false
             }

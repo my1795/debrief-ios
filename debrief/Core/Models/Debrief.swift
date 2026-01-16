@@ -9,6 +9,7 @@ import Foundation
 
 enum DebriefStatus: String, Codable {
     case draft = "DRAFT"
+    case created = "CREATED"
     case uploaded = "UPLOADED"
     case processing = "PROCESSING"
     case ready = "READY"
@@ -96,6 +97,11 @@ struct Debrief: Identifiable, Codable {
         self.audioUrl = audioUrl
         self.audioStoragePath = audioStoragePath
     }
+}
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let didDeleteDebrief = Notification.Name("didDeleteDebrief")
 }
 
 // MARK: - Private Decoding Helpers

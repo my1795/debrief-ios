@@ -115,6 +115,7 @@ class APIService {
     private func mapResponseToDomain(_ resp: DebriefAPIResponse) -> Debrief {
         let mappedStatus: DebriefStatus = {
             switch resp.status {
+            case "CREATED": return .created
             case "PROCESSING": return .processing
             case "READY": return .ready
             case "FAILED": return .failed
@@ -173,12 +174,12 @@ class APIService {
         
         let (responseData, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, 201 == httpResponse.statusCode else {
+        guard let httpResponse = response as? HTTPURLResponse, [201, 202].contains(httpResponse.statusCode) else {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
         
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .millisecondsSince1970
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)

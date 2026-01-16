@@ -136,6 +136,32 @@ class FirestoreService {
         return debrief
     }
     
+    // MARK: - Real-time Debrief Observation
+    
+    func listenToDebrief(debriefId: String, completion: @escaping (Result<Debrief, Error>) -> Void) -> ListenerRegistration {
+        return db.collection("debriefs")
+            .document(debriefId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+                
+                guard let document = snapshot, document.exists else {
+                    completion(.failure(NSError(domain: "FirestoreService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Document does not exist"])))
+                    return
+                }
+                
+                do {
+                    let debrief = try document.data(as: Debrief.self)
+                    completion(.success(debrief))
+                } catch {
+                    print("❌ [FirestoreService] Failed to decode debrief update: \(error)")
+                    completion(.failure(error))
+                }
+            }
+    }
+    
     func getDebriefsCount(userId: String, start: Date, end: Date) async throws -> Int {
         // Backend stores times as Int64 milliseconds (e.g. 1768341426596)
         // We must query using Numbers, not Dates/Timestamps.

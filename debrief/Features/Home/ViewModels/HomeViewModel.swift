@@ -17,29 +17,55 @@ class HomeViewModel: ObservableObject {
     private let firestoreService = FirestoreService.shared
     private let contactStoreService: ContactStoreServiceProtocol
     
+    // Combine logic to observe UploadManager
+    private var cancellables = Set<AnyCancellable>()
+    
     init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService()) {
         self.contactStoreService = contactStoreService
+        
+        // Observe pending uploads and re-filter list when they change
+        DebriefUploadManager.shared.$pendingDebriefs
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.filterDebriefs()
+            }
+            .store(in: &cancellables)
+            
+        // Observe deletions from Detail View or elsewhere
+        NotificationCenter.default.publisher(for: .didDeleteDebrief)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self, let id = notification.userInfo?["debriefId"] as? String else { return }
+                
+                print("🗑 [HomeViewModel] Removing deleted debrief: \(id)")
+                
+                // Remove from lists
+                self.debriefs.removeAll { $0.id == id }
+                self.filteredDebriefs.removeAll { $0.id == id }
+                
+                // Also remove if it was pending (Manager handles its own state, but we filter manager's list too)
+                self.filterDebriefs() 
+            }
+            .store(in: &cancellables)
     }
     
     func fetchDebriefs(userId: String) async {
         do {
             let fetchedDebriefs = try await firestoreService.fetchDebriefs(userId: userId)
             
-            // Resolve Names locally if missing
+            // Resolve Names locally
             var resolvedDebriefs: [Debrief] = []
             
             for debrief in fetchedDebriefs {
                 var finalDebrief = debrief
                 
-                // Since APIService now returns empty name, we MUST resolve locally using contactId
                 if !debrief.contactId.isEmpty {
-                    // Try to resolve name from device contacts
                     if let localName = await contactStoreService.getContactName(for: debrief.contactId) {
                         finalDebrief = Debrief(
                             id: debrief.id,
-                            userId: debrief.userId, // Use from fetched (or passed userId)
+                            userId: debrief.userId,
                             contactId: debrief.contactId,
-                            contactName: localName, // Resolved Name
+                            contactName: localName,
                             occurredAt: debrief.occurredAt,
                             duration: debrief.duration,
                             status: debrief.status,
@@ -50,13 +76,11 @@ class HomeViewModel: ObservableObject {
                             audioStoragePath: debrief.audioStoragePath
                         )
                     } else {
-                         // Fallback if ID not found in device (e.g. deleted contact)
-                         // finalDebrief name remains "" or we can set "Deleted Contact"
                          finalDebrief = Debrief(
                             id: debrief.id,
                             userId: debrief.userId,
                             contactId: debrief.contactId,
-                            contactName: "Deleted Contact", // Or keep empty? User said "Deleted Contact" in example code
+                            contactName: "Deleted Contact",
                             occurredAt: debrief.occurredAt,
                             duration: debrief.duration,
                             status: debrief.status,
@@ -68,7 +92,6 @@ class HomeViewModel: ObservableObject {
                         )
                     }
                 } else {
-                    // No contact ID involved
                     finalDebrief = Debrief(
                         id: debrief.id,
                         userId: debrief.userId,
@@ -84,8 +107,6 @@ class HomeViewModel: ObservableObject {
                         audioStoragePath: debrief.audioStoragePath
                     )
                 }
-                
-                print("📜 [HomeViewModel] Debrief: \(finalDebrief.id) - Duration: \(finalDebrief.duration)s")
                 resolvedDebriefs.append(finalDebrief)
             }
             
@@ -100,10 +121,20 @@ class HomeViewModel: ObservableObject {
     }
     
     func filterDebriefs() {
+        // MERGE: Pending Uploads + Fetched Debriefs
+        // We filter out any pending items that might have completed and are now in the fetched list (by ID overlap)
+        // Ideally, UploadManager removes them from pending once ready, but strict overlap check is safer.
+        
+        let pending = DebriefUploadManager.shared.pendingDebriefs
+        // Exclude pending items if they already exist in fetched list (by ID)
+        let uniquePending = pending.filter { p in !debriefs.contains(where: { $0.id == p.id }) }
+        
+        let allDebriefs = uniquePending + debriefs
+        
         if searchQuery.isEmpty {
-            filteredDebriefs = debriefs
+            filteredDebriefs = allDebriefs
         } else {
-            filteredDebriefs = debriefs.filter { debrief in
+            filteredDebriefs = allDebriefs.filter { debrief in
                 debrief.contactName.localizedCaseInsensitiveContains(searchQuery) ||
                 (debrief.summary?.localizedCaseInsensitiveContains(searchQuery) ?? false)
             }
