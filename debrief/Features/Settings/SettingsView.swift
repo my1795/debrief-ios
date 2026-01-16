@@ -127,27 +127,146 @@ struct SettingsView: View {
                             .foregroundStyle(.white.opacity(0.4))
                             .padding(.top, 8)
                         
-                        // Sign Out Button (Bottom)
-                        Button(action: {
-                            authSession.signOut()
-                        }) {
-                            Text("Sign Out")
+                        // Danger Zone (Replaces Sign Out)
+                        SettingsSection(title: "Danger Zone") {
+                            Button(action: {
+                                authSession.signOut()
+                            }) {
+                                Text("Sign Out")
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.gray.opacity(0.3))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            
+                            Button(action: {
+                                viewModel.showDeleteAccountWarning = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                    Text("Delete Account")
+                                }
                                 .font(.headline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white) // White text on Red background usually looks better
+                                .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.red.opacity(0.9)) // Solid red
+                                .padding(.vertical, 12)
+                                .background(Color.red.opacity(0.8))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .shadow(radius: 5)
+                            }
                         }
-                        .padding(.horizontal)
                         .padding(.bottom, 40)
                     }
                     .padding(.bottom, 20)
                 }
             }
+            // Warning Sheet
+            .sheet(isPresented: $viewModel.showDeleteAccountWarning) {
+                ZStack {
+                    Color(hex: "1F2937").ignoresSafeArea() // Dark gray bg
+                    
+                    VStack(spacing: 24) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 64))
+                            .foregroundStyle(.red)
+                        
+                        Text("Delete Account?")
+                            .font(.largeTitle)
+                            .bold()
+                            .foregroundStyle(.white)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("⚠️ This action will permanently delete:")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                            
+                            BulletPoint(text: "All your recordings & audio files")
+                            BulletPoint(text: "All transcripts and summaries")
+                            BulletPoint(text: "Your call history")
+                            BulletPoint(text: "Usage statistics")
+                            BulletPoint(text: "Your account login")
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        Text("This action cannot be undone.\nYour data cannot be recovered.")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.red.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            viewModel.showDeleteAccountWarning = false
+                            // Delay slightly to allow sheet to close before showing alert/input if needed
+                            // Or better, transition to next "screen" within sheet if complex. 
+                            // User asked for "Screen 3: Final Confirmation". Let's toggle the next state.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                viewModel.showDeleteConfirmationInput = true
+                            }
+                        }) {
+                            Text("I Understand, Continue")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.red)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        
+                        Button("Cancel") {
+                            viewModel.showDeleteAccountWarning = false
+                        }
+                        .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(24)
+                }
+                .presentationDetents([.fraction(0.85)])
+            }
+            // Final Confirmation Input
+            .alert("Final Confirmation", isPresented: $viewModel.showDeleteConfirmationInput) {
+                TextField("Type DELETE", text: $viewModel.deleteConfirmationText)
+                Button("Permanently Delete", role: .destructive) {
+                    viewModel.deleteAccount()
+                }
+                .disabled(viewModel.deleteConfirmationText != "DELETE")
+                
+                Button("Cancel", role: .cancel) {
+                    viewModel.deleteConfirmationText = ""
+                }
+            } message: {
+                Text("Please type \"DELETE\" to confirm permanent account deletion.")
+            }
+            // Loading Overlay
+            .overlay {
+                if viewModel.isDeletingAccount {
+                    ZStack {
+                        Color.black.opacity(0.6).ignoresSafeArea()
+                        ProgressView("Deleting Account...")
+                            .tint(.white)
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
         }
+    }
+}
+
+// Helper for Bullet Points
+struct BulletPoint: View {
+    let text: String
+    var body: some View {
+        HStack(alignment: .top) {
+            Text("•")
+            Text(text)
+        }
+        .foregroundStyle(.white.opacity(0.8))
     }
 }
 

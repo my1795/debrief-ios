@@ -112,12 +112,23 @@ class SettingsViewModel: ObservableObject {
             print("Error clearing local data: \(error)")
         }
         
-        // 2. Delete Remote (Stub/Placeholder for now as we don't have bulk delete yet)
+        // 2. Delete Remote & Trigger Quota Recalculation
         Task {
-            // TODO: Call FirestoreService.deleteAllRecordings(userId: ...)
-            // For now, assume this action triggers the cleanup process.
-            // We resetting the local representation of usage cost/cache loop.
-             calculateCacheSize()
+            do {
+                try await APIService.shared.deleteAllDebriefs()
+                
+                // 3. Refresh Quota & Local Cache
+                await MainActor.run {
+                    self.fetchUserQuota()
+                    self.calculateCacheSize()
+                }
+            } catch {
+                print("Error clearing remote data: \(error)")
+                // Still refresh local size even if remote fails
+                await MainActor.run {
+                    self.calculateCacheSize()
+                }
+            }
         }
     }
     
@@ -127,6 +138,29 @@ class SettingsViewModel: ObservableObject {
             self.appVersion = "v\(version) (\(build))"
         } else {
             self.appVersion = "v1.0.0"
+        }
+    }
+    
+    @Published var showDeleteAccountWarning = false
+    @Published var showDeleteConfirmationInput = false
+    @Published var deleteConfirmationText = ""
+    @Published var isDeletingAccount = false
+    
+    // ... (Existing Methods) ...
+    
+    func deleteAccount() {
+        guard deleteConfirmationText == "DELETE" else { return }
+        isDeletingAccount = true
+        
+        Task {
+            do {
+                let _ = try await APIService.shared.deleteAccount()
+                try Auth.auth().signOut()
+                // Session listener in App entry point should handle navigation to Login
+            } catch {
+                print("Error deleting account: \(error)")
+                isDeletingAccount = false
+            }
         }
     }
     
