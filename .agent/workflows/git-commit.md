@@ -1,7 +1,7 @@
 ---
 description: makes git commit and push with the context
 ---
-
+// turbo-all
 Analyze recent changes from last commit 
 make sure add all changes with git add . in project directory 
 run git commit -m "" put the proper message there from last commits messages must start 

@@ -100,24 +100,38 @@ struct Debrief: Identifiable, Codable {
 
 // MARK: - Private Decoding Helpers
 private extension Debrief {
-    /// Tries multiple formats for Date (Double seconds, Int64 milliseconds, or Standard Date)
+    /// Tries multiple formats for Date (Double seconds, Double millis, Int64 millis, or Standard Date)
     static func decodeDate(from container: KeyedDecodingContainer<CodingKeys>) throws -> Date {
+        // Priority 1: Standard generic Double decode (handles Numbers in Firestore)
         if let timestamp = try? container.decode(Double.self, forKey: .occurredAt) {
+            // Heuristic: If timestamp is > 100 billion (approx year 5138), it's Milliseconds.
+            // Current timestamp in seconds is ~1.7 billion. In millis it is ~1.7 trillion.
+            if timestamp > 100_000_000_000 {
+                 return Date(timeIntervalSince1970: timestamp / 1000.0)
+            }
             return Date(timeIntervalSince1970: timestamp)
-        } else if let millis = try? container.decode(Int64.self, forKey: .occurredAt) {
+        } 
+        // Priority 2: Explicit Int64 (if Double failed for some reason)
+        else if let millis = try? container.decode(Int64.self, forKey: .occurredAt) {
             return Date(timeIntervalSince1970: TimeInterval(millis) / 1000.0)
-        } else {
+        } 
+        // Priority 3: Standard Date strategy
+        else {
             return try container.decode(Date.self, forKey: .occurredAt)
         }
     }
     
     /// Tries to decode duration from standard or legacy keys, defaulting to 0
     static func decodeDuration(from container: KeyedDecodingContainer<CodingKeys>) -> TimeInterval {
-        if let d = try? container.decode(TimeInterval.self, forKey: .duration) {
-            return d
-        } else if let d = try? container.decode(TimeInterval.self, forKey: .audioDurationSec) {
-            return d
-        }
+        // Try duration (Double)
+        if let d = try? container.decode(TimeInterval.self, forKey: .duration) { return d }
+        // Try duration (Int)
+        if let d = try? container.decode(Int.self, forKey: .duration) { return TimeInterval(d) }
+        
+        // Legacy keys
+        if let d = try? container.decode(TimeInterval.self, forKey: .audioDurationSec) { return d }
+        if let d = try? container.decode(Int.self, forKey: .audioDurationSec) { return TimeInterval(d) }
+        
         return 0
     }
 }

@@ -162,7 +162,7 @@ struct StatsOverviewView: View {
                 HStack {
                     Image(systemName: "person.2.fill")
                         .foregroundStyle(Color.teal)
-                    Text("Top Contacts")
+                    Text("Top Contacts (This Week)")
                         .font(.headline)
                         .foregroundStyle(.white)
                     Spacer()

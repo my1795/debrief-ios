@@ -48,7 +48,7 @@ struct ContactDetailView: View {
                     HStack(spacing: 12) {
                         DetailStatCard(title: "Debriefs", value: "\(debriefs.count)", icon: "mic.fill")
                         DetailStatCard(title: "Last Met", value: lastMetDate(), icon: "calendar")
-                        DetailStatCard(title: "Minutes", value: "\(totalMinutes())", icon: "clock")
+                        DetailStatCard(title: "Duration", value: totalDurationString(), icon: "clock")
                     }
                     .padding(.horizontal)
                     
@@ -106,7 +106,7 @@ struct ContactDetailView: View {
         
         isLoading = true
         do {
-            // Fetch debriefs for this contact ID using FirestoreService
+            // Fetch debriefs for this contact ID using FirestoreService (default caching behavior)
             let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, contactId: contact.id)
             self.debriefs = allDebriefs.sorted(by: { $0.occurredAt > $1.occurredAt })
         } catch {
@@ -115,9 +115,22 @@ struct ContactDetailView: View {
         isLoading = false
     }
     
-    func totalMinutes() -> Int {
-        let seconds = debriefs.reduce(0) { $0 + $1.duration }
-        return Int(seconds / 60)
+    func totalDurationString() -> String {
+        let totalSeconds = Int(debriefs.reduce(0) { $0 + $1.duration })
+        if totalSeconds == 0 { return "0s" }
+        
+        if totalSeconds < 60 {
+            return "\(totalSeconds)s"
+        }
+        
+        let minutes = totalSeconds / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        } else {
+            let hours = minutes / 60
+            let remainingMins = minutes % 60
+            return "\(hours)h \(remainingMins)m"
+        }
     }
     
     func lastMetDate() -> String {
