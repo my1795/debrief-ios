@@ -13,6 +13,36 @@ class FirestoreService {
     static let shared = FirestoreService()
     private let db = Firestore.firestore()
     
+    // Pagination Result Helper
+    struct FetchResult {
+        let debriefs: [Debrief]
+        let lastDocument: DocumentSnapshot?
+    }
+    
+    // MARK: - Cursor Pagination
+    /// Fetches a page of debriefs starting after the given document cursor.
+    func fetchDebriefs(userId: String, limit: Int, startAfter: DocumentSnapshot?) async throws -> FetchResult {
+        var query = db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            // .order(by: "occurredAt", descending: true) 
+            // NOTE: Sorting by occurredAt usually requires an index if combined with filtered queries (like userId). 
+            // Ensure composite index exists in console: debriefs (userId ASC, occurredAt DESC)
+            .order(by: "occurredAt", descending: true)
+            .limit(to: limit)
+            
+        if let lastDoc = startAfter {
+            query = query.start(afterDocument: lastDoc)
+        }
+        
+        let snapshot = try await query.getDocuments()
+        
+        let debriefs = snapshot.documents.compactMap { document in
+            try? document.data(as: Debrief.self)
+        }
+        
+        return FetchResult(debriefs: debriefs, lastDocument: snapshot.documents.last)
+    }
+    
     private init() {}
     
     // MARK: - Quota Observation (Real-time)

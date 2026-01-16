@@ -26,7 +26,7 @@ struct MainTabView: View {
             Group {
                 switch selectedTab {
                 case .debriefs:
-                    DebriefsListView(authSession: authSession)
+                    TimelineView(userId: authSession.user?.id ?? "")
                 case .stats:
                     StatsView()
                 case .record:
