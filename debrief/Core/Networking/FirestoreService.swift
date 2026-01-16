@@ -17,7 +17,7 @@ class FirestoreService {
     func fetchDebriefs(userId: String) async throws -> [Debrief] {
         let snapshot = try await db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)
-            .order(by: "occurredAt", descending: true)
+            // .order(by: "occurredAt", descending: true)
             .getDocuments()
         
         return snapshot.documents.compactMap { document in
@@ -34,7 +34,7 @@ class FirestoreService {
         let snapshot = try await db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)
             .whereField("contactId", isEqualTo: contactId)
-            .order(by: "occurredAt", descending: true)
+            // .order(by: "occurredAt", descending: true) // Removed to avoid composite index requirement
             .getDocuments()
         
         return snapshot.documents.compactMap { document in
