@@ -153,16 +153,6 @@ struct DebriefDetailView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
-                Button {
-                    // Logic to add reminder
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color(hex: "5EEAD4"))
-                        .padding(6)
-                        .background(Color(hex: "5EEAD4").opacity(0.1))
-                        .clipShape(Circle())
-                }
             }
             
             VStack(alignment: .leading, spacing: 12) {
