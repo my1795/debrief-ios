@@ -27,6 +27,7 @@ class StatsViewModel: ObservableObject {
     @Published var quota: StatsQuota = .empty
     @Published var topContacts: [TopContactStat] = []
     @Published var isLoading = false
+    @Published var isLoadingTopContacts = false // Calc state
     @Published var errorMessage: String?
     
     // Recent Activity Chart Data (Keeping mock for now as API doesn't return history yet)
@@ -55,6 +56,8 @@ class StatsViewModel: ObservableObject {
         // Start Real-time Quota Observation
         if let userId = AuthSession.shared.user?.id {
             startObservingQuota(userId: userId)
+            // Trigger Top Contacts Calculation (Async, non-blocking)
+            loadTopContactsWithCache(userId: userId)
         }
         
         await loadWidgetData()
@@ -99,6 +102,86 @@ class StatsViewModel: ObservableObject {
             storageLimitMB: userQuota.storageLimitMB
         )
     }
+    // MARK: - Top Contacts (Client-Side Aggregation + Cache)
+    
+    private func loadTopContactsWithCache(userId: String) {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // 1. Determine Current Week (Sunday to Sunday)
+        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+        
+        // 2. Check Cache
+        if let data = UserDefaults.standard.data(forKey: "top_contacts_cache_\(userId)"),
+           let cache = try? JSONDecoder().decode(TopContactsCache.self, from: data) {
+            
+            let isSameWeek = calendar.isDate(cache.weekStart, inSameDayAs: weekStart)
+            let age = now.timeIntervalSince(cache.timestamp)
+            
+            if isSameWeek && age < 12 * 3600 {
+                print("⚡️ [StatsViewModel] Using Cached Top Contacts (Age: \(Int(age) / 60) min)")
+                self.topContacts = cache.stats
+                return
+            }
+        }
+        
+        // 3. Fetch & Aggregate
+        Task {
+            await MainActor.run { self.isLoadingTopContacts = true }
+            
+            let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart)!
+            
+            do {
+                print("⚡️ [StatsViewModel] Fetching Debriefs for Top Contacts calculation...")
+                // Use fetchDebriefs logic (which queries 'debriefs' collection)
+                let debriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: weekStart, end: weekEnd)
+                
+                // Aggregate: Group by contactId
+                var agg: [String: (count: Int, duration: Int)] = [:]
+                
+                for d in debriefs {
+                    let cid = d.contactId
+                    if cid.isEmpty { continue }
+                    let curr = agg[cid] ?? (0, 0)
+                    agg[cid] = (curr.count + 1, curr.duration + Int(d.duration))
+                }
+                
+                // Sort by Count Descending
+                let sorted = agg.sorted { $0.value.count > $1.value.count }.prefix(5)
+                
+                // Resolve Names & Map
+                var resolved: [TopContactStat] = []
+                for (cid, metrics) in sorted {
+                    let name = await ContactStoreService.shared.getContactName(for: cid) ?? "Unknown Contact"
+                    resolved.append(TopContactStat(
+                        id: cid,
+                        name: name,
+                        company: "External",
+                        debriefs: metrics.count,
+                        minutes: metrics.duration / 60,
+                        percentage: 0 // Placeholder
+                    ))
+                }
+                
+                // Update UI & Cache
+                await MainActor.run {
+                    self.topContacts = resolved
+                    self.isLoadingTopContacts = false
+                    
+                    // Save Cache
+                    let cache = TopContactsCache(timestamp: Date(), weekStart: weekStart, stats: resolved)
+                    if let encoded = try? JSONEncoder().encode(cache) {
+                        UserDefaults.standard.set(encoded, forKey: "top_contacts_cache_\(userId)")
+                    }
+                }
+                
+            } catch {
+                print("❌ [StatsViewModel] Failed to calculate Top Contacts: \(error)")
+                await MainActor.run { self.isLoadingTopContacts = false }
+            }
+        }
+    }
+    
     private func loadWidgetData() async {
         do {
             let (thisWeekStart, thisWeekEnd) = weekBounds(for: Date())

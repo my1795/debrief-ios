@@ -116,13 +116,19 @@ struct StatsQuota {
     let storageLimitMB: Int
 }
 
-struct TopContactStat: Identifiable {
+struct TopContactStat: Identifiable, Codable {
     let id: String
     let name: String
     let company: String
     let debriefs: Int
     let minutes: Int
     let percentage: Double
+}
+
+struct TopContactsCache: Codable {
+    let timestamp: Date
+    let weekStart: Date
+    let stats: [TopContactStat]
 }
 
 struct UsageEvent: Identifiable {

@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 Product context you must always respect
 
 Product Name: Debrief

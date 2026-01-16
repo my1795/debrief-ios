@@ -166,48 +166,88 @@ struct StatsOverviewView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                     Spacer()
-                    Button("View All") { }
-                        .font(.caption)
-                        .foregroundStyle(.teal)
                 }
                 
-                VStack(spacing: 8) {
-                    ForEach(Array(viewModel.topContacts.enumerated()), id: \.element.id) { index, contact in
-                        HStack(spacing: 12) {
-                            // Rank Circle
-                            ZStack {
-                                Circle()
-                                    .fill(Color.teal.opacity(0.3))
-                                    .frame(width: 32, height: 32)
-                                Text("#\(index + 1)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.teal)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(contact.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.white)
-                                Text(contact.company)
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("\(contact.debriefs)")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.white)
-                                Text("\(contact.minutes)m")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
+                if viewModel.isLoadingTopContacts && viewModel.topContacts.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            ProgressView()
+                                .tint(.white)
+                            Text("Calculating...")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
                         }
-                        .padding(12)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                } else if viewModel.topContacts.isEmpty {
+                    Text("No contacts this week")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.vertical, 10)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(viewModel.topContacts.enumerated()), id: \.element.id) { index, contact in
+                            NavigationLink(destination: ContactDetailView(contact: Contact(
+                                id: contact.id,
+                                name: contact.name == "Unknown Contact" ? "Deleted User" : contact.name,
+                                handle: contact.company == "External" ? nil : contact.company,
+                                totalDebriefs: contact.debriefs
+                            ))) {
+                                HStack(spacing: 12) {
+                                    // Rank Circle
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.teal.opacity(0.3))
+                                            .frame(width: 32, height: 32)
+                                        Text("#\(index + 1)")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.teal)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 4) {
+                                            Text(contact.name)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundStyle(.white)
+                                                .lineLimit(1)
+                                            
+                                            // Handle "Unknown" or deleted case
+                                            if contact.name == "Unknown Contact" {
+                                                Text("- Deleted")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.red.opacity(0.8))
+                                            }
+                                        }
+                                        
+                                        Text(contact.company)
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("\(contact.debriefs)")
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.white)
+                                        Text("\(contact.minutes)m")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.3))
+                                }
+                                .padding(12)
+                                .background(Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
