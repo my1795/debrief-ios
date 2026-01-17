@@ -14,6 +14,8 @@ class TimelineViewModel: ObservableObject {
     @Published var debriefs: [Debrief] = []
     @Published var isLoading = false
     @Published var searchText = ""
+    @Published var filters = DebriefFilters()
+    @Published var recentContacts: [Contact] = []
     
     // Grouped for UI
     @Published var groupedDebriefs: [String: [Debrief]] = [:]
@@ -96,6 +98,11 @@ class TimelineViewModel: ObservableObject {
     
     // MARK: - Pagination Logic
     
+    func applyFilters(_ newFilters: DebriefFilters, userId: String) async {
+        self.filters = newFilters
+        await loadData(userId: userId, refresh: true)
+    }
+    
     func loadData(userId: String, refresh: Bool = false) async {
         if refresh {
             lastDocument = nil
@@ -113,12 +120,18 @@ class TimelineViewModel: ObservableObject {
         do {
             let result = try await firestoreService.fetchDebriefs(
                 userId: userId,
+                filters: filters,
                 limit: pageSize,
                 startAfter: lastDocument
             )
             
             // Resolve Names locally (Address Book lookup)
             let resolvedDebriefs = await resolveNames(for: result.debriefs)
+            
+            // Extract recent contacts from the *first page* if we are refreshing and no filters active
+            if refresh && !filters.isActive {
+                await extractRecentContacts(from: resolvedDebriefs)
+            }
             
             if refresh {
                 self.debriefs = resolvedDebriefs
@@ -137,6 +150,28 @@ class TimelineViewModel: ObservableObject {
         
         isLoading = false
         isFetching = false
+    }
+    
+    private func extractRecentContacts(from debriefs: [Debrief]) async {
+        var seenIds = Set<String>()
+        var contacts: [Contact] = []
+        
+        for debrief in debriefs {
+            guard !debrief.contactId.isEmpty, !seenIds.contains(debrief.contactId) else { continue }
+            seenIds.insert(debrief.contactId)
+            
+            let name = debrief.contactName.isEmpty ? "Unknown" : debrief.contactName
+            // Note: We use existing Debrief info. Real app might fetch full Contact obj.
+            let contact = Contact(
+                id: debrief.contactId,
+                name: name,
+                handle: nil,
+                totalDebriefs: 0 // Not critical here
+            )
+            contacts.append(contact)
+            if contacts.count >= 10 { break }
+        }
+        self.recentContacts = contacts
     }
     
     // Helper: Address Book Lookup

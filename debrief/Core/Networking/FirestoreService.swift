@@ -19,14 +19,32 @@ class FirestoreService {
         let lastDocument: DocumentSnapshot?
     }
     
-    // MARK: - Cursor Pagination
-    /// Fetches a page of debriefs starting after the given document cursor.
-    func fetchDebriefs(userId: String, limit: Int, startAfter: DocumentSnapshot?) async throws -> FetchResult {
-        var query = db.collection("debriefs")
+    // MARK: - Cursor Pagination with Filters
+    /// Fetches a page of debriefs starting after the given document cursor, optionally filtering by contact or date.
+    func fetchDebriefs(userId: String, filters: DebriefFilters? = nil, limit: Int, startAfter: DocumentSnapshot?) async throws -> FetchResult {
+        var query: Query = db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)
-            // .order(by: "occurredAt", descending: true) 
-            // NOTE: Sorting by occurredAt usually requires an index if combined with filtered queries (like userId). 
-            // Ensure composite index exists in console: debriefs (userId ASC, occurredAt DESC)
+        
+        // Apply Contact Filter
+        if let contactId = filters?.contactId, !contactId.isEmpty {
+            query = query.whereField("contactId", isEqualTo: contactId)
+        }
+        
+        // Apply Date Range Filter
+        if let startDate = filters?.dateRange?.startDate {
+            let startMs = Int64(startDate.timeIntervalSince1970 * 1000)
+            query = query.whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+        }
+        
+        // Sorting
+        // Firestore requires the first orderBy field to match the first whereField inequality
+        // If we filter by occurredAt (date range), we must order by occurredAt first (which we do).
+        // If we filter by contactId, we still want to sort by time.
+        // Composite Index needed:
+        // 1. userId + occurredAt DESC
+        // 2. userId + contactId + occurredAt DESC
+        
+        query = query
             .order(by: "occurredAt", descending: true)
             .limit(to: limit)
             

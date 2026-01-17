@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TimelineView: View {
     @StateObject private var viewModel = TimelineViewModel()
+    @State private var showFilters = false
     let userId: String // Passed from parent
     
     // For Phase 1: Search is visual or basic local filter (placeholder)
@@ -65,8 +66,38 @@ struct TimelineView: View {
                         .padding(.horizontal)
                         .padding(.top, 16)
                         
-                        SearchBar(text: $viewModel.searchText)
-                            .padding(.horizontal)
+                        HStack(spacing: 10) {
+                            SearchBar(text: $viewModel.searchText)
+                            
+                            Button {
+                                showFilters = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 20)) // Bigger icon
+                                    .foregroundColor(.white)
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.1))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Group {
+                                            if viewModel.filters.isActive {
+                                                Circle()
+                                                    .fill(Color.orange)
+                                                    .frame(width: 10, height: 10)
+                                                    .offset(x: 14, y: -14)
+                                            }
+                                        }
+                                    )
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Active Filters
+                        ActiveFilterChips(filters: $viewModel.filters) { newFilters in
+                            Task {
+                                await viewModel.applyFilters(newFilters, userId: userId)
+                            }
+                        }
                     }
                     .padding(.bottom, 16)
                     .background(Color(hex: "022c22"))
@@ -74,6 +105,19 @@ struct TimelineView: View {
                     // Infinite Scroll Feed
                     ScrollView {
                         LazyVStack(spacing: 24, pinnedViews: [.sectionHeaders]) {
+                            
+                            // Only show Recent People if no contact filter active
+                            if viewModel.filters.contactId == nil && !viewModel.recentContacts.isEmpty {
+                                RecentPeopleStrip(contacts: viewModel.recentContacts) { contact in
+                                    var newFilters = viewModel.filters
+                                    newFilters.contactId = contact.id
+                                    newFilters.contactName = contact.name // Ensure name is set
+                                    Task {
+                                        await viewModel.applyFilters(newFilters, userId: userId)
+                                    }
+                                }
+                                .padding(.bottom, -8) // Tighten spacing
+                            }
                             
                             ForEach(viewModel.sections) { section in
                                 Section {
@@ -118,6 +162,13 @@ struct TimelineView: View {
                     Task {
                         await viewModel.loadData(userId: userId)
                         await viewModel.loadDailyStats(userId: userId)
+                    }
+                }
+            }
+            .sheet(isPresented: $showFilters) {
+                FilterSheet(filters: $viewModel.filters, isPresented: $showFilters) { newFilters in
+                    Task {
+                        await viewModel.applyFilters(newFilters, userId: userId)
                     }
                 }
             }
