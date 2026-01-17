@@ -104,7 +104,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "8AB06A23-6FB4-4755-AAF4-9733F55F3E7B"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "debrief/Core/Networking/FirestoreService.swift"
@@ -114,6 +114,22 @@
             endingLineNumber = "23"
             landmarkName = "FirestoreService"
             landmarkType = "3">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "0A824E0D-FF7B-4705-8028-FC68BBD8AC4A"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "debrief/Features/Contacts/Views/ContactDetailView.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "27"
+            endingLineNumber = "27"
+            landmarkName = "body"
+            landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

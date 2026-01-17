@@ -9,252 +9,203 @@ import SwiftUI
 import FirebaseFirestore
 
 struct ContactDetailView: View {
-    let contact: Contact
-    @State private var debriefs: [Debrief] = [] // Will fetch later
-    @State private var isLoading = false
+    @StateObject private var viewModel: ContactDetailViewModel
     @EnvironmentObject var authSession: AuthSession
+    @State private var showFilterSheet = false
+    @State private var showScrollToTop = false
+    
+    init(contact: Contact) {
+        _viewModel = StateObject(wrappedValue: ContactDetailViewModel(contact: contact))
+    }
     
     var body: some View {
         ZStack {
             // Background - Matching ContactsListView
             Color(hex: "134E4A").ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Profile Header
-                    VStack(spacing: 12) {
-                        Circle()
-                            .fill(LinearGradient(colors: [Color(hex: "2DD4BF"), Color(hex: "0D9488")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 80, height: 80)
-                            .overlay(
-                                Text(getInitials(name: contact.name))
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundStyle(.white)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    // Anchor
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("detailScroll")).minY)
+                    }
+                    .frame(height: 0)
+                    .id("top")
+                    
+                    VStack(spacing: 24) {
+                        // Profile Header
+                        ProfileHeader(contact: viewModel.contact)
+                            .padding(.top, 20)
+                        
+                        HStack(spacing: 12) {
+                            DetailStatCard(
+                                title: "Debriefs",
+                                value: "\(viewModel.totalDebriefsCount)",
+                                icon: "mic.fill",
+                                color: .teal,
+                                infoText: "Total debriefs recorded. (Sunday-to-Sunday if 'This Week' selected)"
                             )
+                            DetailStatCard(
+                                title: "Last Met",
+                                value: viewModel.lastMetString,
+                                icon: "calendar",
+                                color: .teal,
+                                infoText: "The date of your most recent debrief with this contact."
+                            )
+                            DetailStatCard(
+                                title: "Duration",
+                                value: "\(viewModel.totalDurationMinutes)m",
+                                icon: "clock",
+                                color: .teal,
+                                infoText: "Total duration of recorded debriefs for the selected period."
+                            )
+                        }
+                        .padding(.horizontal)
                         
-                        Text(contact.name)
+                        // Search & Filters
+                        VStack(spacing: 12) {
+                            HStack(spacing: 10) {
+                                SearchBar(text: $viewModel.searchText)
+                                
+                                Button {
+                                    showFilterSheet = true
+                                } label: {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.white)
+                                        .padding(10)
+                                        .background(Color.white.opacity(0.1))
+                                        .clipShape(Circle())
+                                        .overlay(
+                                            Group {
+                                                if viewModel.filters.dateOption != .all || viewModel.filters.hasActionItems {
+                                                    Circle()
+                                                        .fill(Color.orange)
+                                                        .frame(width: 10, height: 10)
+                                                        .offset(x: 14, y: -14)
+                                                }
+                                            }
+                                        )
+                                }
+                            }
+                            .padding(.horizontal)
+                            
+
+                        }
+                        
+                        // Interactions History
+                        Text("Interaction History")
                             .font(.title2)
-                            .bold()
+                            .fontWeight(.bold)
                             .foregroundStyle(.white)
-                        
-                        if let handle = contact.handle {
-                            Text(handle)
-                                .font(.body)
-                                .foregroundStyle(.white.opacity(0.7))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                            if viewModel.isLoading {
+                                HStack {
+                                    Spacer()
+                                    ProgressView().tint(.white)
+                                    Spacer()
+                                }
+                            } else if viewModel.debriefs.isEmpty && !viewModel.isLoading {
+                                VStack(spacing: 12) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.white.opacity(0.3))
+                                    Text("No recorded debriefs yet")
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 40)
+                            } else {
+                                // List
+                                let section = TimelineViewModel.TimelineSection(
+                                    id: "history",
+                                    title: "", 
+                                    date: Date(),
+                                    debriefs: viewModel.displayedDebriefs
+                                )
+                                
+                                DebriefListContainer(
+                                    sections: [section],
+                                    userId: authSession.user?.id ?? "",
+                                    isLoading: false, 
+                                    onRefresh: {
+                                        await viewModel.loadData(refresh: true)
+                                    },
+                                    onLoadMore: { item in
+                                        if let idx = viewModel.debriefs.firstIndex(where: { $0.id == item.id }), idx >= viewModel.debriefs.count - 5 {
+                                            Task { await viewModel.loadData(refresh: false) }
+                                        }
+                                    },
+                                    hideContactNames: true,
+                                    hasInternalScrollView: false
+                                )
+                            }
                         }
                     }
-                    .padding(.top, 20)
-                    
-                    // Stats Grid
-                    HStack(spacing: 12) {
-                        DetailStatCard(title: "Debriefs", value: "\(debriefs.count)", icon: "mic.fill")
-                        DetailStatCard(title: "Last Met", value: lastMetDate(), icon: "calendar")
-                        DetailStatCard(title: "Duration", value: totalDurationString(), icon: "clock")
-                    }
-                    .padding(.horizontal)
-                    
-                    // Interactions History
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Interaction History")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal)
-                        
-                        if isLoading {
-                            HStack {
-                                Spacer()
-                                ProgressView().tint(.white)
-                                Spacer()
-                            }
-                        } else if debriefs.isEmpty {
-                            VStack(spacing: 12) {
-                                Image(systemName: "bubble.left.and.bubble.right")
-                                    .font(.largeTitle)
-                                    .foregroundStyle(.white.opacity(0.3))
-                                Text("No recorded debriefs yet")
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
-                        } else {
-                            // Reuse Unified Container
-                            // We construct a single "history" section or just a standard section
-                            // Note: TimelineViewModel usually handles grouping, but here we just have a flat list sorted by date.
-                            // We can wrap it in a single section or refactor to group by date if desired.
-                            // For minimal changes: Single Section.
-                            
-                            let section = TimelineViewModel.TimelineSection(
-                                id: "history",
-                                title: "", // No title needed for single section inside this view
-                                date: Date(),
-                                debriefs: debriefs
-                            )
-                            
-                            DebriefListContainer(
-                                sections: [section],
-                                userId: authSession.user?.id ?? "",
-                                isLoading: isFetching && debriefs.count > 0,
-                                onRefresh: {
-                                    await loadFirstPage()
-                                },
-                                onLoadMore: { debrief in
-                                    // Trigger next page when scrolling near bottom
-                                    let thresholdIndex = debriefs.count - 5
-                                    if let index = debriefs.firstIndex(where: { $0.id == debrief.id }),
-                                       index >= thresholdIndex {
-                                        Task {
-                                            await loadNextPage()
-                                        }
-                                    }
-                                },
-                                hideContactNames: true,
-                                hasInternalScrollView: false
-                            )
+
+                .coordinateSpace(name: "detailScroll")
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                    withAnimation { showScrollToTop = value < -300 }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if showScrollToTop {
+                        ScrollToTopButton {
+                            withAnimation { proxy.scrollTo("top", anchor: .top) }
                         }
                     }
                 }
-            }
-            .refreshable {
-                await loadFirstPage()
+                .refreshable {
+                    await viewModel.loadData(refresh: true)
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            if debriefs.isEmpty {
-                await loadFirstPage()
+            if viewModel.debriefs.isEmpty {
+                await viewModel.loadData(refresh: true)
+            }
+        }
+        .sheet(isPresented: $showFilterSheet) {
+            FilterSheet(
+                filters: $viewModel.filters,
+                isPresented: $showFilterSheet,
+                allowContactSelection: false
+            ) { newFilters in
+                viewModel.filters = newFilters
+                Task {
+                    await viewModel.loadData(refresh: true)
+                }
             }
         }
     }
+}
+
+// Helper Views
+struct ProfileHeader: View {
+    let contact: Contact
     
-    // Pagination State
-    @State private var lastDocument: DocumentSnapshot?
-    @State private var hasMore = true
-    @State private var isFetching = false
-    private let pageSize = 20
-    
-    func loadFirstPage() async {
-        guard !isFetching else { return }
-        // Reset state
-        lastDocument = nil
-        hasMore = true
-        // Only clear if we want a hard reset, but usually we keep existing for refresh feel until new data comes?
-        // Standard pattern: clear if pull-to-refresh
-        // If initial load, list is empty anyway.
-        // Let's clear to be safe on explicit refresh.
-        // debriefs = [] // Let's NOT clear yet to avoid UI flash on refresh, just replace on result.
-        // Actually for correct pagination state reset we should clear or handle replacement carefully.
-        // Simplest: Clear.
-        if debriefs.isEmpty { isLoading = true }
-        
-        await loadNextPage(isRefreshing: true)
-    }
-    
-    func loadNextPage(isRefreshing: Bool = false) async {
-        guard let userId = authSession.user?.id else { return }
-        guard (hasMore || isRefreshing) && (!isFetching || isRefreshing) else { return }
-        
-        // Critical: Set fetching flag after guard
-        if isFetching && !isRefreshing { return } // Double safety against concurrent scroll triggers
-        isFetching = true
-        
-        do {
-            let filters = DebriefFilters(contactId: contact.id)
-            
-            let result = try await FirestoreService.shared.fetchDebriefs(
-                userId: userId,
-                filters: filters,
-                limit: pageSize,
-                startAfter: isRefreshing ? nil : lastDocument
-            )
-            
-            // Enrich contact name AND optimize memory (Lite Object)
-            let enrichedDebriefs = result.debriefs.map { debrief -> Debrief in
-                // 1. Fix Name
-                var contactName = debrief.contactName
-                if contactName.isEmpty || contactName == "Unknown" {
-                    contactName = self.contact.name
-                }
-                
-                // 2. Memory Optimization: Strip heavy fields (Transcript)
-                // The Detail View fetches full data by ID, so we only need list-view data here.
-                let liteTranscript: String?
-                if let t = debrief.transcript {
-                    liteTranscript = String(t.prefix(300)) // Keep snippet for preview if needed
-                } else {
-                    liteTranscript = nil
-                }
-                
-                // Use memberwise initializer to create lightweight copy
-                return Debrief(
-                    id: debrief.id,
-                    userId: debrief.userId,
-                    contactId: debrief.contactId,
-                    contactName: contactName,
-                    occurredAt: debrief.occurredAt,
-                    duration: debrief.duration,
-                    status: debrief.status,
-                    summary: debrief.summary, // Keep summary (usually small) 
-                    transcript: liteTranscript,
-                    actionItems: debrief.actionItems, // Keep action items (usually small strings)
-                    audioUrl: debrief.audioUrl,
-                    audioStoragePath: debrief.audioStoragePath
+    var body: some View {
+        VStack(spacing: 12) {
+            Circle()
+                .fill(LinearGradient(colors: [Color(hex: "2DD4BF"), Color(hex: "0D9488")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 80, height: 80)
+                .overlay(
+                    Text(getInitials(name: contact.name))
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.white)
                 )
-            }
             
-            if isRefreshing {
-                self.debriefs = enrichedDebriefs
-                self.lastDocument = result.lastDocument
-                self.hasMore = result.debriefs.count == pageSize
-            } else {
-                // Determine if we actually had new items to avoid infinite spinner if backend returns empty but hasMore was true?
-                if !enrichedDebriefs.isEmpty {
-                    self.debriefs.append(contentsOf: enrichedDebriefs)
-                    self.lastDocument = result.lastDocument
-                    self.hasMore = result.debriefs.count == pageSize
-                } else {
-                    self.hasMore = false
-                }
-            }
+            Text(contact.name)
+                .font(.title2)
+                .bold()
+                .foregroundStyle(.white)
             
-        } catch {
-            print("❌ [ContactDetailView] Error loading debriefs: \(error)")
-        }
-        
-        isLoading = false
-        isFetching = false
-    }
-    
-    func totalDurationString() -> String {
-        let totalSeconds = Int(debriefs.reduce(0) { $0 + $1.duration })
-        if totalSeconds == 0 { return "0s" }
-        
-        if totalSeconds < 60 {
-            return "\(totalSeconds)s"
-        }
-        
-        let minutes = totalSeconds / 60
-        if minutes < 60 {
-            return "\(minutes)m"
-        } else {
-            let hours = minutes / 60
-            let remainingMins = minutes % 60
-            return "\(hours)h \(remainingMins)m"
-        }
-    }
-    
-    func lastMetDate() -> String {
-        guard let last = debriefs.first?.occurredAt else { return "-" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: last, relativeTo: Date())
-    }
-    
-    func statusColor(_ status: DebriefStatus) -> Color {
-        switch status {
-        case .ready: return .green
-        case .processing: return .yellow
-        case .failed: return .red
-        default: return .gray
+            if let handle = contact.handle {
+                Text(handle)
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
         }
     }
     
@@ -267,25 +218,63 @@ struct ContactDetailView: View {
     }
 }
 
+struct QuickFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isSelected ? Color.white : Color.white.opacity(0.1))
+                .foregroundColor(isSelected ? Color.black : Color.white)
+                .clipShape(Capsule())
+        }
+    }
+}
+
 struct DetailStatCard: View {
     let title: String
     let value: String
     let icon: String
+    let color: Color
+    var infoText: String? = nil
+    
+    @State private var showInfo = false
     
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .foregroundStyle(Color.teal)
+                .font(.title3)
+                .foregroundColor(color)
+            
             Text(value)
                 .font(.headline)
                 .foregroundStyle(.white)
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
+            
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+                
+                if let info = infoText {
+                    Button(action: { showInfo.toggle() }) {
+                        Image(systemName: "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .alert(isPresented: $showInfo) {
+                        Alert(title: Text(title), message: Text(info), dismissButton: .default(Text("OK")))
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color.white.opacity(0.05))
+        .padding(.vertical, 16)
+        .background(Color.white.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

@@ -10,6 +10,7 @@ import Foundation
 struct DebriefFilters: Equatable {
     var contactId: String?
     var contactName: String?
+    var hasActionItems: Bool = false
     var dateOption: DateRangeOption = .all
     
     // Custom Range properties
@@ -30,16 +31,19 @@ struct DebriefFilters: Equatable {
     
     // Computed properties for query consumption
     var startDate: Date? {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday
         let now = Date()
         
         switch dateOption {
         case .today:
             return calendar.startOfDay(for: now)
-        case .thisWeek: // Last 7 days
-            return calendar.date(byAdding: .day, value: -7, to: now)
-        case .thisMonth: // Last 30 days
-            return calendar.date(byAdding: .day, value: -30, to: now)
+        case .thisWeek: // Current Week (Sunday to Sunday)
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+            return calendar.date(from: components)
+        case .thisMonth: // Current Month
+            let components = calendar.dateComponents([.year, .month], from: now)
+            return calendar.date(from: components)
         case .custom:
             return calendar.startOfDay(for: customStartDate)
         case .all:

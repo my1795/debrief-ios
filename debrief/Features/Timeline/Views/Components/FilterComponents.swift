@@ -17,7 +17,9 @@ struct FilterSheet: View {
     // Local state for the sheet before applying
     @State private var tempFilters: DebriefFilters
     
-    init(filters: Binding<DebriefFilters>, isPresented: Binding<Bool>, onApply: @escaping (DebriefFilters) -> Void) {
+    let allowContactSelection: Bool
+    init(filters: Binding<DebriefFilters>, isPresented: Binding<Bool>, allowContactSelection: Bool = true, onApply: @escaping (DebriefFilters) -> Void) {
+        self.allowContactSelection = allowContactSelection
         self._filters = filters
         self._isPresented = isPresented
         self.onApply = onApply
@@ -28,20 +30,22 @@ struct FilterSheet: View {
         NavigationView {
             Form {
                 // Section: Contact
-                Section(header: Text("Contact")) {
-                    NavigationLink(destination: SearchableContactPicker(
-                        selectedContactId: $tempFilters.contactId,
-                        selectedContactName: $tempFilters.contactName
-                    )) {
-                        HStack {
-                            Text("Person")
-                            Spacer()
-                            if let name = tempFilters.contactName {
-                                Text(name)
-                                    .foregroundColor(.primary)
-                            } else {
-                                Text("Any")
-                                    .foregroundColor(.secondary)
+                if allowContactSelection {
+                    Section(header: Text("Contact")) {
+                        NavigationLink(destination: SearchableContactPicker(
+                            selectedContactId: $tempFilters.contactId,
+                            selectedContactName: $tempFilters.contactName
+                        )) {
+                            HStack {
+                                Text("Person")
+                                Spacer()
+                                if let name = tempFilters.contactName {
+                                    Text(name)
+                                        .foregroundColor(.primary)
+                                } else {
+                                    Text("Any")
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     }
