@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct ContactDetailView: View {
     let contact: Contact
@@ -92,46 +93,82 @@ struct ContactDetailView: View {
                             DebriefListContainer(
                                 sections: [section],
                                 userId: authSession.user?.id ?? "",
-                                isLoading: false,
+                                isLoading: isFetching && debriefs.count > 0,
                                 onRefresh: {
-                                    await loadDebriefs()
+                                    await loadFirstPage()
                                 },
-                                onLoadMore: { _ in
-                                    // No pagination in this simple view yet
-                                }
+                                onLoadMore: { debrief in
+                                    // Trigger next page when scrolling near bottom
+                                    let thresholdIndex = debriefs.count - 5
+                                    if let index = debriefs.firstIndex(where: { $0.id == debrief.id }),
+                                       index >= thresholdIndex {
+                                        Task {
+                                            await loadNextPage()
+                                        }
+                                    }
+                                },
+                                hideContactNames: true,
+                                hasInternalScrollView: false
                             )
-                            // We need to override component settings if we want to hide names, 
-                            // but DebriefItem shows name by default. 
-                            // In a contact detail view, showing the name (which is always this contact) is redundant.
-                            // However, our unified component logic currently shows it.
-                            // The user audio said "make it reusable", he didn't strictly forbid redundancy, but good UX would hide it.
-                            // I'll leave it as standard for now to ensure consistency, or I could modify DebriefListContainer to take a param.
-                            // Let's stick to simple reuse first.
                         }
                     }
                 }
             }
+            .refreshable {
+                await loadFirstPage()
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await loadDebriefs()
+            if debriefs.isEmpty {
+                await loadFirstPage()
+            }
         }
     }
     
-    func loadDebriefs() async {
-        guard let userId = authSession.user?.id else {
-            print("⚠️ [ContactDetailView] No user ID available")
-            return
-        }
+    // Pagination State
+    @State private var lastDocument: DocumentSnapshot?
+    @State private var hasMore = true
+    @State private var isFetching = false
+    private let pageSize = 20
+    
+    func loadFirstPage() async {
+        guard !isFetching else { return }
+        // Reset state
+        lastDocument = nil
+        hasMore = true
+        // Only clear if we want a hard reset, but usually we keep existing for refresh feel until new data comes?
+        // Standard pattern: clear if pull-to-refresh
+        // If initial load, list is empty anyway.
+        // Let's clear to be safe on explicit refresh.
+        // debriefs = [] // Let's NOT clear yet to avoid UI flash on refresh, just replace on result.
+        // Actually for correct pagination state reset we should clear or handle replacement carefully.
+        // Simplest: Clear.
+        if debriefs.isEmpty { isLoading = true }
         
-        isLoading = true
+        await loadNextPage(isRefreshing: true)
+    }
+    
+    func loadNextPage(isRefreshing: Bool = false) async {
+        guard let userId = authSession.user?.id else { return }
+        guard (hasMore || isRefreshing) && (!isFetching || isRefreshing) else { return }
+        
+        // Critical: Set fetching flag after guard
+        if isFetching && !isRefreshing { return } // Double safety against concurrent scroll triggers
+        isFetching = true
+        
         do {
-            // Fetch debriefs for this contact ID using FirestoreService (default caching behavior)
-            // Fetch debriefs for this contact ID using FirestoreService (default caching behavior)
-            let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, contactId: contact.id)
+            let filters = DebriefFilters(contactId: contact.id)
             
-            // Fix: Populate contact name locally since we know who we are viewing
-            let enrichedDebriefs = allDebriefs.map { debrief -> Debrief in
+            let result = try await FirestoreService.shared.fetchDebriefs(
+                userId: userId,
+                filters: filters,
+                limit: pageSize,
+                startAfter: isRefreshing ? nil : lastDocument
+            )
+            
+            // Enrich contact name locally since we know who we are viewing
+            let enrichedDebriefs = result.debriefs.map { debrief -> Debrief in
                 var copy = debrief
                 if copy.contactName.isEmpty || copy.contactName == "Unknown" {
                     copy.contactName = self.contact.name
@@ -139,11 +176,27 @@ struct ContactDetailView: View {
                 return copy
             }
             
-            self.debriefs = enrichedDebriefs.sorted(by: { $0.occurredAt > $1.occurredAt })
+            if isRefreshing {
+                self.debriefs = enrichedDebriefs
+                self.lastDocument = result.lastDocument
+                self.hasMore = result.debriefs.count == pageSize
+            } else {
+                // Determine if we actually had new items to avoid infinite spinner if backend returns empty but hasMore was true?
+                if !enrichedDebriefs.isEmpty {
+                    self.debriefs.append(contentsOf: enrichedDebriefs)
+                    self.lastDocument = result.lastDocument
+                    self.hasMore = result.debriefs.count == pageSize
+                } else {
+                    self.hasMore = false
+                }
+            }
+            
         } catch {
-            print("Error loading contact debriefs: \(error)")
+            print("❌ [ContactDetailView] Error loading debriefs: \(error)")
         }
+        
         isLoading = false
+        isFetching = false
     }
     
     func totalDurationString() -> String {
