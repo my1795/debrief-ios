@@ -247,18 +247,26 @@ class StatsViewModel: ObservableObject {
     private func loadOverviewData() async {
         do {
             print("🔄 [StatsViewModel] Loading overview data...")
-            // Fetch ALL debriefs for accurate client-side stats
-            // Firestore caching handles efficiency for subsequent loads
+            // Fetch ONLY current week's debriefs for efficiency
             guard let userId = AuthSession.shared.user?.id else {
                  print("⚠️ [StatsViewModel] No User ID found in session")
                  return
             }
             
-            // By fetching all, we can calculate everything accurately without strict backend dependency
-            let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId)
-            print("✅ [StatsViewModel] Fetched \(allDebriefs.count) debriefs for stats")
+            // Calculate Start of Week (Sunday)
+            var calendar = Calendar.current
+            calendar.firstWeekday = 1 // 1 = Sunday
+            let now = Date()
+            let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+            
+            // Fetch only necessary range
+            // NOTE: 'Streak' calculation is now limited to the fetched range (Current Week).
+            // For all-time streak, we should rely on a persisted user stat in future iterations.
+            let weeklyDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: startOfWeek, end: now)
+            print("✅ [StatsViewModel] Fetched \(weeklyDebriefs.count) debriefs for weekly overview")
 
-            let stats = calculateStats(from: allDebriefs)
+            // Calculate stats from the limited set (Running on Main Actor is fine for < 100 items)
+            let stats = calculateStats(from: weeklyDebriefs, isWeeklySet: true)
             self.overview = stats
             
             // Update Widgets with real data derived from all debriefs if needed, 
@@ -272,18 +280,22 @@ class StatsViewModel: ObservableObject {
         }
     }
     
-    private func calculateStats(from allDebriefs: [Debrief]) -> StatsOverview {
-        if allDebriefs.isEmpty { return .empty }
+    private func calculateStats(from debriefs: [Debrief], isWeeklySet: Bool = false) -> StatsOverview {
+        if debriefs.isEmpty { return .empty }
         
-        // Filter for Current Week (Sunday to Sunday)
-        var calendar = Calendar.current
-        calendar.firstWeekday = 1 // 1 = Sunday
-        
-        let now = Date()
-        // Get start of the current week (Sunday at 00:00)
-        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
-        
-        let weeklyDebriefs = allDebriefs.filter { $0.occurredAt >= startOfWeek }
+        // If the set came pre-filtered (isWeeklySet), use it directly.
+        // Otherwise handle filtering (legacy path).
+        let weeklyDebriefs: [Debrief]
+        if isWeeklySet {
+            weeklyDebriefs = debriefs
+        } else {
+             // Fallback logic if passed full array
+             var calendar = Calendar.current
+             calendar.firstWeekday = 1
+             let now = Date()
+             let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+             weeklyDebriefs = debriefs.filter { $0.occurredAt >= startOfWeek }
+        }
         
         // 1. Total Counts (Weekly)
         let totalDebriefs = weeklyDebriefs.count
@@ -315,7 +327,9 @@ class StatsViewModel: ObservableObject {
         // For now, we use `allDebriefs` for streak to be accurate, as streak is usually an "All Time" bragging right.
         // If "All Time" fetch is banned, we can't show true streak. 
         // Assuming we fetched all, we calculate streak on all. 
-        let streak = calculateHourlyStreak(debriefs: allDebriefs)
+        // Streak is calculated on the dataset available. 
+        // If we only fetch weekly data, this shows 'Weekly Streak'.
+        let streak = calculateHourlyStreak(debriefs: debriefs)
         
         return StatsOverview(
             totalDebriefs: totalDebriefs,

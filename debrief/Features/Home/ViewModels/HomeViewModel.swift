@@ -63,7 +63,11 @@ class HomeViewModel: ObservableObject {
     
     func fetchDebriefs(userId: String) async {
         do {
-            let fetchedDebriefs = try await firestoreService.fetchDebriefs(userId: userId)
+            // Limit to 50 items to prevent loading 10k+ documents on Home
+            // Pagination should be added for accessing older history.
+            // Limit to 50 items using pagination API
+            let result = try await firestoreService.fetchDebriefs(userId: userId, limit: 50, startAfter: nil)
+            let fetchedDebriefs = result.debriefs
             
             // Resolve Names locally
             var resolvedDebriefs: [Debrief] = []

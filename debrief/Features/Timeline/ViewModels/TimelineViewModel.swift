@@ -30,6 +30,13 @@ class TimelineViewModel: ObservableObject {
     private let firestoreService = FirestoreService.shared
     private var cancellables = Set<AnyCancellable>()
     
+    // Shared Formatter for performance
+    private static let sectionDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d"
+        return formatter
+    }()
+
     init() {
         $searchText
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
@@ -40,7 +47,9 @@ class TimelineViewModel: ObservableObject {
             .store(in: &cancellables)
             
         // Observe pending uploads (Offline First)
+        // Debounce to prevent thrashing on rapid updates (progress etc)
         DebriefUploadManager.shared.$pendingDebriefs
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.groupDebriefsByDate()
@@ -254,8 +263,7 @@ class TimelineViewModel: ObservableObject {
             } else if calendar.isDateInYesterday(date) {
                 title = "Yesterday"
             } else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMMM d"
+                let formatter = Self.sectionDateFormatter
                 title = formatter.string(from: date)
             }
             

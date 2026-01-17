@@ -343,40 +343,43 @@ class FirestoreService {
             .whereField("occurredAt", isLessThan: endMs)
             .getDocuments()
         
-        var totalDuration: Double = 0
-        var totalActionItems = 0
-        var contactIds = Set<String>()
-        
-        for doc in snapshot.documents {
-            let data = doc.data()
+        // Process on background thread to avoid Main Thread hang with 10k+ items
+        return try await Task.detached(priority: .userInitiated) {
+            var totalDuration: Double = 0
+            var totalActionItems = 0
+            var contactIds = Set<String>()
             
-            // Duration
-            if let d = data["duration"] as? Double {
-                totalDuration += d
-            } else if let d = data["duration"] as? Int {
-                totalDuration += Double(d)
-            } else if let d = data["audioDurationSec"] as? Double {
-                totalDuration += d
-            } else if let d = data["audioDurationSec"] as? Int {
-                totalDuration += Double(d)
+            for doc in snapshot.documents {
+                let data = doc.data()
+                
+                // Duration
+                if let d = data["duration"] as? Double {
+                    totalDuration += d
+                } else if let d = data["duration"] as? Int {
+                    totalDuration += Double(d)
+                } else if let d = data["audioDurationSec"] as? Double {
+                    totalDuration += d
+                } else if let d = data["audioDurationSec"] as? Int {
+                    totalDuration += Double(d)
+                }
+                
+                // Action Items
+                if let items = data["actionItems"] as? [String] {
+                    totalActionItems += items.count
+                }
+                
+                // Unique Contacts
+                if let cid = data["contactId"] as? String, !cid.isEmpty {
+                    contactIds.insert(cid)
+                }
             }
             
-            // Action Items
-            if let items = data["actionItems"] as? [String] {
-                totalActionItems += items.count
-            }
-            
-            // Unique Contacts
-            if let cid = data["contactId"] as? String, !cid.isEmpty {
-                contactIds.insert(cid)
-            }
-        }
-        
-        return WeeklyStats(
-            count: snapshot.documents.count,
-            duration: Int(totalDuration),
-            actionItems: totalActionItems,
-            uniqueContacts: contactIds.count
-        )
+            return WeeklyStats(
+                count: snapshot.documents.count,
+                duration: Int(totalDuration),
+                actionItems: totalActionItems,
+                uniqueContacts: contactIds.count
+            )
+        }.value
     }
 }
