@@ -9,53 +9,71 @@ import Foundation
 
 struct DebriefFilters: Equatable {
     var contactId: String?
-    var contactName: String? // Store name for display in chips/UI
-    var dateRange: DateRange?
+    var contactName: String?
+    var dateOption: DateRangeOption = .all
+    
+    // Custom Range properties
+    var customStartDate: Date = Date()
+    var customEndDate: Date = Date()
     
     var isActive: Bool {
-        return contactId != nil || (dateRange != nil && dateRange != .all)
+        return contactId != nil || dateOption != .all
     }
     
     mutating func clear() {
         contactId = nil
         contactName = nil
-        dateRange = nil
-    }
-}
-
-enum DateRange: Equatable, CaseIterable {
-    case today
-    case thisWeek
-    case thisMonth
-    case all
-    // Custom range can be added here if needed in future phases
-    // case custom(start: Date, end: Date)
-    
-    var displayName: String {
-        switch self {
-        case .today: return "Today"
-        case .thisWeek: return "This Week"
-        case .thisMonth: return "This Month"
-        case .all: return "All Time"
-        }
+        dateOption = .all
+        customStartDate = Date()
+        customEndDate = Date()
     }
     
-    // Helper to get start date for query
+    // Computed properties for query consumption
     var startDate: Date? {
         let calendar = Calendar.current
         let now = Date()
         
-        switch self {
+        switch dateOption {
         case .today:
             return calendar.startOfDay(for: now)
-        case .thisWeek:
-            // Last 7 days
+        case .thisWeek: // Last 7 days
             return calendar.date(byAdding: .day, value: -7, to: now)
-        case .thisMonth:
-             // Last 30 days
+        case .thisMonth: // Last 30 days
             return calendar.date(byAdding: .day, value: -30, to: now)
+        case .custom:
+            return calendar.startOfDay(for: customStartDate)
         case .all:
             return nil
+        }
+    }
+    
+    var endDate: Date? {
+        switch dateOption {
+        case .custom:
+            // End of the selected end date
+            let calendar = Calendar.current
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: customEndDate) ?? Date()
+            return calendar.startOfDay(for: nextDay)
+        default:
+            return nil
+        }
+    }
+}
+
+enum DateRangeOption: String, Equatable, CaseIterable {
+    case all
+    case today
+    case thisWeek
+    case thisMonth
+    case custom
+    
+    var displayName: String {
+        switch self {
+        case .all: return "All Time"
+        case .today: return "Today"
+        case .thisWeek: return "This Week"
+        case .thisMonth: return "This Month"
+        case .custom: return "Custom Range"
         }
     }
 }

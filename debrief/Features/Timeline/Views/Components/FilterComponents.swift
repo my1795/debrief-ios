@@ -50,12 +50,17 @@ struct FilterSheet: View {
                 // Section: Date Range
                 Section(header: Text("Date")) {
                     Picker("Time Period", selection: Binding(
-                        get: { tempFilters.dateRange ?? .all },
-                        set: { tempFilters.dateRange = $0 == .all ? nil : $0 }
+                        get: { tempFilters.dateOption },
+                        set: { tempFilters.dateOption = $0 }
                     )) {
-                        ForEach(DateRange.allCases, id: \.self) { range in
-                            Text(range.displayName).tag(range)
+                        ForEach(DateRangeOption.allCases, id: \.self) { option in
+                            Text(option.displayName).tag(option)
                         }
+                    }
+                    
+                    if tempFilters.dateOption == .custom {
+                        DatePicker("Start Date", selection: $tempFilters.customStartDate, displayedComponents: .date)
+                        DatePicker("End Date", selection: $tempFilters.customEndDate, displayedComponents: .date)
                     }
                 }
                 
@@ -173,6 +178,16 @@ struct ActiveFilterChips: View {
     @Binding var filters: DebriefFilters
     let onUpdate: (DebriefFilters) -> Void
     
+    private var dateLabel: String {
+        if filters.dateOption == .custom {
+             let formatter = DateFormatter()
+             formatter.dateFormat = "MMM d"
+             return "\(formatter.string(from: filters.customStartDate)) - \(formatter.string(from: filters.customEndDate))"
+        } else {
+            return filters.dateOption.displayName
+        }
+    }
+    
     var body: some View {
         if filters.isActive {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -186,10 +201,10 @@ struct ActiveFilterChips: View {
                         }
                     }
                     
-                    if let range = filters.dateRange, range != .all {
-                        FilterChip(label: range.displayName, icon: "calendar") {
+                    if filters.dateOption != .all {
+                        FilterChip(label: dateLabel, icon: "calendar") {
                             var new = filters
-                            new.dateRange = nil
+                            new.dateOption = .all
                             onUpdate(new)
                         }
                     }

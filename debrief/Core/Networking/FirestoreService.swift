@@ -30,10 +30,16 @@ class FirestoreService {
             query = query.whereField("contactId", isEqualTo: contactId)
         }
         
-        // Apply Date Range Filter
-        if let startDate = filters?.dateRange?.startDate {
+        // Apply Date Range Filter (Start)
+        if let startDate = filters?.startDate {
             let startMs = Int64(startDate.timeIntervalSince1970 * 1000)
             query = query.whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+        }
+        
+        // Apply Date Range Filter (End) - e.g. for Custom Range
+        if let endDate = filters?.endDate {
+            let endMs = Int64(endDate.timeIntervalSince1970 * 1000)
+            query = query.whereField("occurredAt", isLessThan: endMs)
         }
         
         // Sorting
