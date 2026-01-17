@@ -167,13 +167,38 @@ struct ContactDetailView: View {
                 startAfter: isRefreshing ? nil : lastDocument
             )
             
-            // Enrich contact name locally since we know who we are viewing
+            // Enrich contact name AND optimize memory (Lite Object)
             let enrichedDebriefs = result.debriefs.map { debrief -> Debrief in
-                var copy = debrief
-                if copy.contactName.isEmpty || copy.contactName == "Unknown" {
-                    copy.contactName = self.contact.name
+                // 1. Fix Name
+                var contactName = debrief.contactName
+                if contactName.isEmpty || contactName == "Unknown" {
+                    contactName = self.contact.name
                 }
-                return copy
+                
+                // 2. Memory Optimization: Strip heavy fields (Transcript)
+                // The Detail View fetches full data by ID, so we only need list-view data here.
+                let liteTranscript: String?
+                if let t = debrief.transcript {
+                    liteTranscript = String(t.prefix(300)) // Keep snippet for preview if needed
+                } else {
+                    liteTranscript = nil
+                }
+                
+                // Use memberwise initializer to create lightweight copy
+                return Debrief(
+                    id: debrief.id,
+                    userId: debrief.userId,
+                    contactId: debrief.contactId,
+                    contactName: contactName,
+                    occurredAt: debrief.occurredAt,
+                    duration: debrief.duration,
+                    status: debrief.status,
+                    summary: debrief.summary, // Keep summary (usually small) 
+                    transcript: liteTranscript,
+                    actionItems: debrief.actionItems, // Keep action items (usually small strings)
+                    audioUrl: debrief.audioUrl,
+                    audioStoragePath: debrief.audioStoragePath
+                )
             }
             
             if isRefreshing {
