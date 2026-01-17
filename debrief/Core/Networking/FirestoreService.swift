@@ -67,7 +67,11 @@ class FirestoreService {
         return FetchResult(debriefs: debriefs, lastDocument: snapshot.documents.last)
     }
     
-    private init() {}
+    private init() {
+        let settings = FirestoreSettings()
+        settings.cacheSizeBytes = 100 * 1024 * 1024 // 100MB
+        db.settings = settings
+    }
     
     // MARK: - Quota Observation (Real-time)
     
