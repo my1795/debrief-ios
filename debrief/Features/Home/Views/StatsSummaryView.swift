@@ -16,8 +16,8 @@ struct StatsSummaryView: View {
                  ProgressView()
                     .tint(.white)
                     .frame(maxWidth: .infinity, minHeight: 60)
-            } else if let error = viewModel.errorMessage, viewModel.stats.isEmpty {
-                 Text(error)
+            } else if let error = viewModel.error, viewModel.stats.isEmpty {
+                 Text(error.userMessage)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
                     .frame(maxWidth: .infinity, minHeight: 60)

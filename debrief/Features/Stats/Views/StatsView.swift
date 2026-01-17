@@ -130,5 +130,8 @@ struct StatsView: View {
         .task {
             await viewModel.loadData()
         }
+        .errorBanner(error: $viewModel.error, onRetry: {
+            Task { await viewModel.loadData() }
+        })
     }
 }

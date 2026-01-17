@@ -59,7 +59,7 @@ struct ContactsView: View {
                     } else if viewModel.contacts.isEmpty {
                         VStack(spacing: 16) {
                             Spacer()
-                            if let error = viewModel.errorMessage {
+                            if let error = viewModel.error {
                                 Image(systemName: "lock.fill")
                                     .font(.system(size: 48))
                                     .foregroundStyle(.white.opacity(0.6))
@@ -67,7 +67,7 @@ struct ContactsView: View {
                                     .font(.title2)
                                     .bold()
                                     .foregroundStyle(.white)
-                                Text(error)
+                                Text(error.userMessage)
                                     .font(.subheadline)
                                     .foregroundStyle(.white.opacity(0.7))
                                     .multilineTextAlignment(.center)
@@ -104,6 +104,9 @@ struct ContactsView: View {
             .task {
                 await viewModel.loadContacts()
             }
+            .errorBanner(error: $viewModel.error, onRetry: {
+                Task { await viewModel.loadContacts() }
+            })
         }
     }
 }

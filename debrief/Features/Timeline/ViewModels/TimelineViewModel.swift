@@ -16,6 +16,7 @@ class TimelineViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var filters = DebriefFilters()
     @Published var recentContacts: [Contact] = []
+    @Published var error: AppError? = nil  // For user-facing errors
     
     // Grouped for UI
     @Published var groupedDebriefs: [String: [Debrief]] = [:]

@@ -160,6 +160,9 @@ struct ContactDetailView: View {
                 }
             }
         }
+        .errorBanner(error: $viewModel.error, onRetry: {
+            Task { await viewModel.loadData(refresh: true) }
+        })
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if viewModel.debriefs.isEmpty {

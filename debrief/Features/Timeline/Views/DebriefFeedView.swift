@@ -147,6 +147,9 @@ struct DebriefFeedView: View {
                     }
                 }
             }
+            .errorBanner(error: $viewModel.error, onRetry: {
+                Task { await viewModel.loadData(userId: userId, refresh: true) }
+            })
         }
     }
 }

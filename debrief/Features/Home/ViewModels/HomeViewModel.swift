@@ -21,6 +21,7 @@ class HomeViewModel: ObservableObject {
         var todayMins: Int = 0
     }
     @Published var homeStats: HomeStats = HomeStats()
+    @Published var error: AppError? = nil  // User-facing errors
     
     private let firestoreService = FirestoreService.shared
     private let contactStoreService: ContactStoreServiceProtocol
@@ -79,6 +80,7 @@ class HomeViewModel: ObservableObject {
             await loadRealtimeStats(userId: userId)
         } catch {
             print("Failed to fetch debriefs: \(error)")
+            self.error = AppError.from(error)
         }
     }
     
@@ -118,6 +120,7 @@ class HomeViewModel: ObservableObject {
             )
         } catch {
             print("❌ [HomeViewModel] Failed to load daily stats: \(error)")
+            // Stats errors are less critical, don't show banner for stats alone
         }
     }
     

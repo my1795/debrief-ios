@@ -13,6 +13,7 @@ class ContactDetailViewModel: ObservableObject {
     @Published var totalDebriefsCount: Int = 0
     @Published var totalDurationMinutes: Int = 0
     @Published var lastMetString: String = "-"
+    @Published var error: AppError? = nil  // User-facing errors
     
     // Pagination
     private var lastDocument: DocumentSnapshot?
@@ -154,6 +155,7 @@ class ContactDetailViewModel: ObservableObject {
             
         } catch {
             print("Error fetch: \(error)")
+            self.error = AppError.from(error)
         }
         
         isLoading = false
@@ -216,6 +218,7 @@ class ContactDetailViewModel: ObservableObject {
             
         } catch {
             print("❌ [ContactDetailViewModel] Stats Error: \(error)")
+            self.error = AppError.from(error)
         }
     }
     

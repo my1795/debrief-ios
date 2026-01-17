@@ -28,7 +28,7 @@ class StatsViewModel: ObservableObject {
     @Published var topContacts: [TopContactStat] = []
     @Published var isLoading = false
     @Published var isLoadingTopContacts = false // Calc state
-    @Published var errorMessage: String?
+    @Published var error: AppError? = nil  // User-facing errors
     
     // Recent Activity Chart Data (Keeping mock for now as API doesn't return history yet)
     @Published var recentActivity: [UsageEvent] = [
@@ -50,7 +50,7 @@ class StatsViewModel: ObservableObject {
     
     func loadData() async {
         isLoading = true
-        errorMessage = nil
+        error = nil
         print("📊 [StatsViewModel] Starting loadData...") // LOGGING
         
         // Start Real-time Quota Observation

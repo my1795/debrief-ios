@@ -13,7 +13,7 @@ import Combine
 class ContactsViewModel: ObservableObject {
     @Published var contacts: [Contact] = []
     @Published var isLoading = false
-    @Published var errorMessage: String?
+    @Published var error: AppError? = nil  // User-facing errors
     @Published var searchText: String = ""
     
     private let contactStoreService: ContactStoreServiceProtocol
@@ -25,12 +25,12 @@ class ContactsViewModel: ObservableObject {
     
     func loadContacts() async {
         isLoading = true
-        errorMessage = nil
+        error = nil
         
         // Check permissions first
         let granted = await contactStoreService.requestAccess()
         guard granted else {
-            self.errorMessage = "Permission denied. Please enable contacts access in Settings."
+            self.error = .unknown(message: "Permission denied. Please enable contacts access in Settings.")
             self.isLoading = false
             return
         }
@@ -41,7 +41,7 @@ class ContactsViewModel: ObservableObject {
             self.filterContacts()
         } catch {
             print("ERROR Loading Contacts: \(error)")
-            self.errorMessage = "Failed to load contacts."
+            self.error = AppError.from(error)
         }
         
         isLoading = false
