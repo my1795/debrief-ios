@@ -1,0 +1,152 @@
+//
+//  TimelineView.swift
+//  debrief
+//
+//  Created by Mustafa Yıldırım on 17/01/2026.
+//
+
+import SwiftUI
+
+struct DebriefFeedView: View {
+    @StateObject private var viewModel = TimelineViewModel()
+    @State private var showFilters = false
+    let userId: String // Passed from parent
+    
+    // For Phase 1: Search is visual or basic local filter (placeholder)
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // Background
+                Color(hex: "022c22").ignoresSafeArea() // dark-bg
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 16) {
+                        HStack {
+                            Text("Debriefs") // Renamed from Timeline
+                                .font(.largeTitle.weight(.bold))
+                                .foregroundColor(.white)
+                            
+                            Spacer()
+                            
+                            // Daily Stats Pill
+                            HStack(spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Text("📝")
+                                    Text("\(viewModel.dailyStats.todayDebriefs)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Text("/")
+                                        .foregroundStyle(.white.opacity(0.6))
+                                    Text("📞")
+                                    Text("\(viewModel.dailyStats.todayCalls)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                
+                                HStack(spacing: 4) {
+                                    Text("⏱️")
+                                    Text("\(viewModel.dailyStats.todayMins)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Text("min")
+                                        .foregroundStyle(.white.opacity(0.6))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .font(.caption)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 16)
+                        
+                        HStack(spacing: 10) {
+                            SearchBar(text: $viewModel.searchText)
+                            
+                            Button {
+                                showFilters = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 20)) // Bigger icon
+                                    .foregroundColor(.white)
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.1))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Group {
+                                            if viewModel.filters.isActive {
+                                                Circle()
+                                                    .fill(Color.orange)
+                                                    .frame(width: 10, height: 10)
+                                                    .offset(x: 14, y: -14)
+                                            }
+                                        }
+                                    )
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Active Filters
+                        ActiveFilterChips(filters: $viewModel.filters) { newFilters in
+                            Task {
+                                await viewModel.applyFilters(newFilters, userId: userId)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 16)
+                    .background(Color(hex: "022c22"))
+                    
+                    // Unified List Container using DebriefListContainer
+                    VStack(spacing: 0) {
+                        // Only show Recent People if no contact filter active
+                        if viewModel.filters.contactId == nil && !viewModel.recentContacts.isEmpty {
+                            RecentPeopleStrip(contacts: viewModel.recentContacts) { contact in
+                                var newFilters = viewModel.filters
+                                newFilters.contactId = contact.id
+                                newFilters.contactName = contact.name // Ensure name is set
+                                Task {
+                                    await viewModel.applyFilters(newFilters, userId: userId)
+                                }
+                            }
+                            .padding(.bottom, 8)
+                            .background(Color(hex: "022c22"))
+                        }
+                        
+                        DebriefListContainer(
+                            sections: viewModel.sections,
+                            userId: userId,
+                            isLoading: viewModel.isLoading,
+                            onRefresh: {
+                                await viewModel.loadData(userId: userId, refresh: true)
+                            },
+                            onLoadMore: { debrief in
+                                viewModel.loadMoreIfNeeded(currentItem: debrief, userId: userId)
+                            }
+                        )
+                    }
+                }
+            }
+            .onAppear {
+                if viewModel.debriefs.isEmpty {
+                    Task {
+                        await viewModel.loadData(userId: userId)
+                        await viewModel.loadDailyStats(userId: userId)
+                    }
+                }
+            }
+            .sheet(isPresented: $showFilters) {
+                FilterSheet(filters: $viewModel.filters, isPresented: $showFilters) { newFilters in
+                    Task {
+                        await viewModel.applyFilters(newFilters, userId: userId)
+                    }
+                }
+            }
+        }
+    }
+}

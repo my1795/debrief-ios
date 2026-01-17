@@ -20,7 +20,7 @@ struct Debrief: Identifiable, Codable {
     let id: String
     let userId: String
     let contactId: String
-    let contactName: String
+    var contactName: String
     let occurredAt: Date
     let duration: TimeInterval
     let status: DebriefStatus

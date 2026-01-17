@@ -76,17 +76,37 @@ struct ContactDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
                         } else {
-                            LazyVStack(spacing: 12) {
-                                ForEach(debriefs) { debrief in
-                                    // Reuse the shared component, hiding name since we are in that contact's detail
-                                    // And enable NAVIGATION to the full detail view
-                                    NavigationLink(destination: DebriefDetailView(debrief: debrief, userId: authSession.user?.id ?? "")) {
-                                        DebriefRowView(debrief: debrief, showContactName: false)
-                                    }
-                                    .buttonStyle(.plain)
+                            // Reuse Unified Container
+                            // We construct a single "history" section or just a standard section
+                            // Note: TimelineViewModel usually handles grouping, but here we just have a flat list sorted by date.
+                            // We can wrap it in a single section or refactor to group by date if desired.
+                            // For minimal changes: Single Section.
+                            
+                            let section = TimelineViewModel.TimelineSection(
+                                id: "history",
+                                title: "", // No title needed for single section inside this view
+                                date: Date(),
+                                debriefs: debriefs
+                            )
+                            
+                            DebriefListContainer(
+                                sections: [section],
+                                userId: authSession.user?.id ?? "",
+                                isLoading: false,
+                                onRefresh: {
+                                    await loadDebriefs()
+                                },
+                                onLoadMore: { _ in
+                                    // No pagination in this simple view yet
                                 }
-                            }
-                            .padding(.horizontal)
+                            )
+                            // We need to override component settings if we want to hide names, 
+                            // but DebriefItem shows name by default. 
+                            // In a contact detail view, showing the name (which is always this contact) is redundant.
+                            // However, our unified component logic currently shows it.
+                            // The user audio said "make it reusable", he didn't strictly forbid redundancy, but good UX would hide it.
+                            // I'll leave it as standard for now to ensure consistency, or I could modify DebriefListContainer to take a param.
+                            // Let's stick to simple reuse first.
                         }
                     }
                 }
@@ -107,8 +127,19 @@ struct ContactDetailView: View {
         isLoading = true
         do {
             // Fetch debriefs for this contact ID using FirestoreService (default caching behavior)
+            // Fetch debriefs for this contact ID using FirestoreService (default caching behavior)
             let allDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, contactId: contact.id)
-            self.debriefs = allDebriefs.sorted(by: { $0.occurredAt > $1.occurredAt })
+            
+            // Fix: Populate contact name locally since we know who we are viewing
+            let enrichedDebriefs = allDebriefs.map { debrief -> Debrief in
+                var copy = debrief
+                if copy.contactName.isEmpty || copy.contactName == "Unknown" {
+                    copy.contactName = self.contact.name
+                }
+                return copy
+            }
+            
+            self.debriefs = enrichedDebriefs.sorted(by: { $0.occurredAt > $1.occurredAt })
         } catch {
             print("Error loading contact debriefs: \(error)")
         }
