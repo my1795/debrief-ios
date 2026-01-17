@@ -133,48 +133,55 @@ class FirestoreService {
         
         return try doc.data(as: UserQuota.self)
     }
-    func fetchDebriefs(userId: String) async throws -> [Debrief] {
-        let snapshot = try await db.collection("debriefs")
-            .whereField("userId", isEqualTo: userId)
-            // .order(by: "occurredAt", descending: true)
-            .getDocuments()
+    // MARK: - Convenience Fetch Methods (use main fetchDebriefs internally)
+    
+    /// Fetch all debriefs for a user (no pagination, no filters)
+    /// Use sparingly - prefer paginated fetch for large datasets
+    func fetchAllDebriefs(userId: String) async throws -> [Debrief] {
+        var allDebriefs: [Debrief] = []
+        var lastDoc: DocumentSnapshot? = nil
+        var hasMore = true
         
-        return snapshot.documents.compactMap { document in
-            do {
-                return try document.data(as: Debrief.self)
-            } catch {
-                print("❌ [FirestoreService] Failed to decode debrief (ID: \(document.documentID)): \(error)")
-                return nil
-            }
+        while hasMore {
+            let result = try await fetchDebriefs(
+                userId: userId,
+                filters: nil,
+                limit: 100,
+                startAfter: lastDoc
+            )
+            allDebriefs.append(contentsOf: result.debriefs)
+            lastDoc = result.lastDocument
+            hasMore = result.debriefs.count == 100
         }
+        
+        return allDebriefs
     }
     
-    func fetchDebriefs(userId: String, contactId: String) async throws -> [Debrief] {
-        let snapshot = try await db.collection("debriefs")
-            .whereField("userId", isEqualTo: userId)
-            .whereField("contactId", isEqualTo: contactId)
-            // .order(by: "occurredAt", descending: true) // Removed to avoid composite index requirement
-            .getDocuments()
-        
-        return snapshot.documents.compactMap { document in
-            try? document.data(as: Debrief.self)
-        }
-    }
-    
-    // Added for Stats Refactor
+    /// Fetch debriefs within a date range (for stats calculations)
     func fetchDebriefs(userId: String, start: Date, end: Date) async throws -> [Debrief] {
-        let startMs = Int64(start.timeIntervalSince1970 * 1000)
-        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+        var filters = DebriefFilters()
+        filters.dateOption = .custom
+        filters.customStartDate = start
+        filters.customEndDate = end
         
-        let snapshot = try await db.collection("debriefs")
-            .whereField("userId", isEqualTo: userId)
-            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
-            .whereField("occurredAt", isLessThan: endMs)
-            .getDocuments()
-            
-        return snapshot.documents.compactMap { document in
-             try? document.data(as: Debrief.self)
+        // Fetch all within range (no pagination limit for stats)
+        var allDebriefs: [Debrief] = []
+        var lastDoc: DocumentSnapshot? = nil
+        var hasMore = true
+        
+        while hasMore {
+            let result = try await fetchDebriefs(
+                userId: userId,
+                filters: filters,
+                limit: 100,
+                startAfter: lastDoc
+            )
+            allDebriefs.append(contentsOf: result.debriefs)
+            lastDoc = result.lastDocument
+            hasMore = result.debriefs.count == 100
         }
+        
+        return allDebriefs
     }
     
     func getDebrief(userId: String, debriefId: String) async throws -> Debrief {
@@ -250,6 +257,56 @@ class FirestoreService {
         let snapshot = try await countQuery.getAggregation(source: AggregateSource.server)
         return Int(truncating: snapshot.count)
     }
+    // MARK: - Daily Stats (Consolidated)
+    
+    /// Result type for daily stats - batches 3 separate queries into 1
+    struct DailyStatsResult {
+        let debriefsCount: Int
+        let callsCount: Int
+        let totalDurationSec: Int
+    }
+    
+    /// Fetches daily stats with a single Firestore query for debriefs + count query for calls
+    /// Replaces 3 separate calls with 2 (debriefs data + calls count)
+    func getDailyStats(userId: String, date: Date) async throws -> DailyStatsResult {
+        let (startOfDay, endOfDay) = DateCalculator.dayBounds(for: date)
+        let startMs = DateCalculator.toMilliseconds(startOfDay)
+        let endMs = DateCalculator.toMilliseconds(endOfDay)
+        
+        // Fetch debriefs for the day (we need docs to sum duration)
+        async let debriefsSnapshot = db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .getDocuments()
+        
+        // Fetch calls count (separate collection)
+        async let callsCountQuery = db.collection("calls")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("timestamp", isGreaterThanOrEqualTo: startMs)
+            .whereField("timestamp", isLessThan: endMs)
+            .count
+            .getAggregation(source: .server)
+        
+        let (debriefsDocs, callsAgg) = try await (debriefsSnapshot, callsCountQuery)
+        
+        // Calculate duration from debriefs
+        let totalDuration = debriefsDocs.documents.reduce(0) { sum, doc in
+            let data = doc.data()
+            if let d = data["duration"] as? Double { return sum + Int(d) }
+            if let d = data["duration"] as? Int { return sum + d }
+            if let d = data["audioDurationSec"] as? Double { return sum + Int(d) }
+            if let d = data["audioDurationSec"] as? Int { return sum + d }
+            return sum
+        }
+        
+        return DailyStatsResult(
+            debriefsCount: debriefsDocs.documents.count,
+            callsCount: Int(truncating: callsAgg.count),
+            totalDurationSec: totalDuration
+        )
+    }
+    
     // MARK: - Server-Side Stats Aggregations
     
     func getTotalDuration(userId: String, start: Date, end: Date) async throws -> Int {

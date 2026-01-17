@@ -64,67 +64,10 @@ class HomeViewModel: ObservableObject {
     func fetchDebriefs(userId: String) async {
         do {
             // Limit to 50 items to prevent loading 10k+ documents on Home
-            // Pagination should be added for accessing older history.
-            // Limit to 50 items using pagination API
             let result = try await firestoreService.fetchDebriefs(userId: userId, limit: 50, startAfter: nil)
-            let fetchedDebriefs = result.debriefs
             
-            // Resolve Names locally
-            var resolvedDebriefs: [Debrief] = []
-            
-            for debrief in fetchedDebriefs {
-                var finalDebrief = debrief
-                
-                if !debrief.contactId.isEmpty {
-                    if let localName = await contactStoreService.getContactName(for: debrief.contactId) {
-                        finalDebrief = Debrief(
-                            id: debrief.id,
-                            userId: debrief.userId,
-                            contactId: debrief.contactId,
-                            contactName: localName,
-                            occurredAt: debrief.occurredAt,
-                            duration: debrief.duration,
-                            status: debrief.status,
-                            summary: debrief.summary,
-                            transcript: debrief.transcript,
-                            actionItems: debrief.actionItems,
-                            audioUrl: debrief.audioUrl,
-                            audioStoragePath: debrief.audioStoragePath
-                        )
-                    } else {
-                         finalDebrief = Debrief(
-                            id: debrief.id,
-                            userId: debrief.userId,
-                            contactId: debrief.contactId,
-                            contactName: "Deleted Contact",
-                            occurredAt: debrief.occurredAt,
-                            duration: debrief.duration,
-                            status: debrief.status,
-                            summary: debrief.summary,
-                            transcript: debrief.transcript,
-                            actionItems: debrief.actionItems,
-                            audioUrl: debrief.audioUrl,
-                            audioStoragePath: debrief.audioStoragePath
-                        )
-                    }
-                } else {
-                    finalDebrief = Debrief(
-                        id: debrief.id,
-                        userId: debrief.userId,
-                        contactId: "",
-                        contactName: "Unknown",
-                        occurredAt: debrief.occurredAt,
-                        duration: debrief.duration,
-                        status: debrief.status,
-                        summary: debrief.summary,
-                        transcript: debrief.transcript,
-                        actionItems: debrief.actionItems,
-                        audioUrl: debrief.audioUrl,
-                        audioStoragePath: debrief.audioStoragePath
-                    )
-                }
-                resolvedDebriefs.append(finalDebrief)
-            }
+            // Resolve Names using shared ContactResolver (with caching)
+            let resolvedDebriefs = await ContactResolver.shared.resolveDebriefs(result.debriefs)
             
             let finalResult = resolvedDebriefs
             await MainActor.run {
@@ -164,30 +107,15 @@ class HomeViewModel: ObservableObject {
     }
     
     func loadRealtimeStats(userId: String) async {
-        let now = Date()
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: now)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        
-        async let debriefsCount = statsService.getDebriefsCount(start: startOfDay, end: endOfDay)
-        async let callsCount = statsService.getCallsCount(start: startOfDay, end: endOfDay)
-        // For duration, we might need a new method in StatsService or use FirestoreService directly if StatsService doesn't expose it.
-        // StatsService currently only has getCallsCount and getDebriefsCount.
-        // I should have checked StatsService for duration. It only has counts.
-        // I will use FirestoreService.shared.getTotalDuration for now as plan said.
-        async let durationTotal = firestoreService.getTotalDuration(userId: userId, start: startOfDay, end: endOfDay)
-        
         do {
-            let (dCount, cCount, durationSec) = try await (debriefsCount, callsCount, durationTotal)
-            let durationMins = Int(ceil(Double(durationSec) / 60))
+            let stats = try await firestoreService.getDailyStats(userId: userId, date: Date())
+            let durationMins = Int(ceil(Double(stats.totalDurationSec) / 60))
             
-            await MainActor.run {
-                self.homeStats = HomeStats(
-                    todayDebriefs: dCount,
-                    todayCalls: cCount,
-                    todayMins: durationMins
-                )
-            }
+            self.homeStats = HomeStats(
+                todayDebriefs: stats.debriefsCount,
+                todayCalls: stats.callsCount,
+                todayMins: durationMins
+            )
         } catch {
             print("❌ [HomeViewModel] Failed to load daily stats: \(error)")
         }

@@ -17,6 +17,23 @@ struct DebriefFilters: Equatable {
     var customStartDate: Date = Date()
     var customEndDate: Date = Date()
     
+    // Status filter (nil = all statuses)
+    var status: DebriefStatus? = nil
+    
+    // Pagination (used internally by service, not for UI comparison)
+    // Note: Excluded from Equatable to prevent pagination changes triggering reload
+    var limit: Int? = nil
+    
+    static func == (lhs: DebriefFilters, rhs: DebriefFilters) -> Bool {
+        lhs.contactId == rhs.contactId &&
+        lhs.contactName == rhs.contactName &&
+        lhs.hasActionItems == rhs.hasActionItems &&
+        lhs.dateOption == rhs.dateOption &&
+        lhs.customStartDate == rhs.customStartDate &&
+        lhs.customEndDate == rhs.customEndDate &&
+        lhs.status == rhs.status
+    }
+    
     var isActive: Bool {
         return contactId != nil || dateOption != .all
     }

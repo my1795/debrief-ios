@@ -64,42 +64,20 @@ class TimelineViewModel: ObservableObject {
     }
     @Published var dailyStats = DailyStats()
     
-    // Dependencies
+    // Dependencies (removed unused ones)
     private let statsService = StatsService()
-    private let contactStoreService = ContactStoreService()
     
-    // ...
-    
-    // Load local stats (efficient server-side)
+    // Load daily stats using consolidated query
     func loadDailyStats(userId: String) async {
-        let now = Date()
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: now)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        
-        async let debriefsCount = statsService.getDebriefsCount(start: startOfDay, end: endOfDay)
-        async let callsCount = statsService.getCallsCount(start: startOfDay, end: endOfDay)
-        async let durationTotal = firestoreService.getTotalDuration(userId: userId, start: startOfDay, end: endOfDay)
-        
         do {
-            let (dCount, cCount, durationSec) = try await (debriefsCount, callsCount, durationTotal)
-             let durationVal: Double
-            if let dSec = durationSec as? Int {
-                 durationVal = Double(dSec)
-            } else {
-                 durationVal = Double(truncating: durationSec as! NSNumber)
-            }
+            let stats = try await firestoreService.getDailyStats(userId: userId, date: Date())
+            let durationMins = Int(ceil(Double(stats.totalDurationSec) / 60))
             
-            // Wait, firestoreService.getTotalDuration returns Int.
-            let durationMins = Int(ceil(Double(durationVal) / 60))
-            
-            await MainActor.run {
-                self.dailyStats = DailyStats(
-                    todayDebriefs: dCount,
-                    todayCalls: cCount,
-                    todayMins: durationMins
-                )
-            }
+            self.dailyStats = DailyStats(
+                todayDebriefs: stats.debriefsCount,
+                todayCalls: stats.callsCount,
+                todayMins: durationMins
+            )
         } catch {
             print("❌ [TimelineViewModel] Failed to load daily stats: \(error)")
         }
@@ -183,33 +161,9 @@ class TimelineViewModel: ObservableObject {
         self.recentContacts = contacts
     }
     
-    // Helper: Address Book Lookup
+    // Helper: Address Book Lookup (now uses shared ContactResolver)
     private func resolveNames(for debriefs: [Debrief]) async -> [Debrief] {
-        var resolved: [Debrief] = []
-        for debrief in debriefs {
-            var finalDebrief = debrief
-            if !debrief.contactId.isEmpty {
-                if let localName = await contactStoreService.getContactName(for: debrief.contactId) {
-                    // Create copy with new name
-                    finalDebrief = Debrief(
-                        id: debrief.id,
-                        userId: debrief.userId,
-                        contactId: debrief.contactId,
-                        contactName: localName,
-                        occurredAt: debrief.occurredAt,
-                        duration: debrief.duration,
-                        status: debrief.status,
-                        summary: debrief.summary,
-                        transcript: debrief.transcript,
-                        actionItems: debrief.actionItems,
-                        audioUrl: debrief.audioUrl,
-                        audioStoragePath: debrief.audioStoragePath
-                    )
-                }
-            }
-            resolved.append(finalDebrief)
-        }
-        return resolved
+        return await ContactResolver.shared.resolveDebriefs(debriefs)
     }
     
     func loadMoreIfNeeded(currentItem: Debrief, userId: String) {
