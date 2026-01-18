@@ -15,9 +15,13 @@ enum AppEnvironment {
 struct AppConfig {
     static let shared = AppConfig()
     
-    // CHANGE THIS to switch environments
-    // In a real app, use Build Configurations (XCConfig) to set this automatically.
-    let currentEnvironment: AppEnvironment = .local
+    var currentEnvironment: AppEnvironment {
+        #if DEBUG
+        return .local
+        #else
+        return .production
+        #endif
+    }
     
     var apiBaseURL: String {
         switch currentEnvironment {
@@ -25,7 +29,7 @@ struct AppConfig {
             return "http://localhost:8080/v1"
         case .production:
             // Placeholder: User to update this after backend deployment
-            return "https://api.debrief.app/v1"
+            return "https://debrief-service-306744525686.us-central1.run.app/v1"
         }
     }
     

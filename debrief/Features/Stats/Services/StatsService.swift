@@ -19,7 +19,7 @@ class StatsService: StatsServiceProtocol {
     private let firestoreService: FirestoreService
     private let contactStoreService: ContactStoreService
     private let session: URLSession
-    private let baseURL = "http://localhost:8080/v1" // Align with APIService
+    private var baseURL: String { AppConfig.shared.apiBaseURL }
     
     init(apiService: APIService = .shared, firestoreService: FirestoreService = .shared, contactStoreService: ContactStoreService = .shared, session: URLSession = .shared) {
         self.apiService = apiService

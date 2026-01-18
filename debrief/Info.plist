@@ -17,5 +17,9 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Debrief</string>
+	<key>CFBundleName</key>
+	<string>Debrief</string>
 </dict>
 </plist>

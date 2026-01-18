@@ -148,7 +148,23 @@ class RecordViewModel: ObservableObject {
     // Filter logic handled in groupedContacts computed property
     
     func selectContact(_ contact: Contact) {
-        selectedContact = contact
+        if selectedContact?.id == contact.id {
+            selectedContact = nil // Deselect if already selected
+        } else {
+            selectedContact = contact
+        }
+    }
+    
+    func discardRecording() {
+        state = .complete // Will trigger view dismissal
+        
+        // 1. Stop active recording if any (e.g. if cancelled while recording)
+        if let activeUrl = recorderService.stopRecording() {
+            recorderService.cleanup(url: activeUrl)
+        }
+        
+        // 2. Cleanup stored file (e.g. if cancelled from selection screen)
+        cleanup()
     }
     
     // MARK: - Processing Actions

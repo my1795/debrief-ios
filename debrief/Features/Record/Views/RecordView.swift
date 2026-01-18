@@ -91,6 +91,17 @@ struct RecordView: View {
             }
             
             Spacer()
+            
+            // Cancel Button
+            Button {
+                viewModel.discardRecording()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.bottom, 20)
+            }
         }
     }
     
@@ -98,10 +109,21 @@ struct RecordView: View {
         VStack(spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recording Saved!")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                
+                HStack {
+                    Text("Recording Saved!")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Button("Cancel") {
+                        viewModel.discardRecording()
+                        dismiss()
+                    }
+                    .foregroundColor(.white.opacity(0.8))
+                }
                 
                 HStack {
                     Text("Duration:")
