@@ -18,7 +18,8 @@ enum APIError: Error {
 
 class APIService {
     static let shared = APIService()
-    private let baseURL = "http://localhost:8080/v1" // Configure in Info.plist later
+    // Base URL is now managed by AppConfig
+    private var baseURL: String { AppConfig.shared.apiBaseURL }
     
     private init() {}
     
