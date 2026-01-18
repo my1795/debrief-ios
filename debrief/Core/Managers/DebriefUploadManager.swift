@@ -78,7 +78,7 @@ class DebriefUploadManager: ObservableObject {
                 // API Call
                 let serverDebrief = try await self.apiService.createDebrief(
                     audioUrl: audioUrl,
-                    contactId: contact.id,
+                    contact: contact,
                     duration: duration
                 )
                 

@@ -193,7 +193,9 @@ struct StatsOverviewView: View {
                                 id: contact.id,
                                 name: contact.name == "Unknown Contact" ? "Deleted User" : contact.name,
                                 handle: contact.company == "External" ? nil : contact.company,
-                                totalDebriefs: contact.debriefs
+                                totalDebriefs: contact.debriefs,
+                                phoneNumbers: [],
+                                emailAddresses: []
                             ))) {
                                 HStack(spacing: 12) {
                                     // Rank Circle

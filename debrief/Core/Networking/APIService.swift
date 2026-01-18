@@ -47,7 +47,7 @@ class APIService {
         }
         
         let responses = try decoder.decode([ContactResponse].self, from: data)
-        return responses.map { Contact(id: $0.contactId, name: $0.name, handle: $0.handle ?? "", totalDebriefs: 0) }
+        return responses.map { Contact(id: $0.contactId, name: $0.name, handle: $0.handle ?? "", totalDebriefs: 0, phoneNumbers: [], emailAddresses: []) }
     }
     
     func createContact(name: String, handle: String) async throws -> Contact {
@@ -85,7 +85,7 @@ class APIService {
         }
         
         let resp = try decoder.decode(ContactResponse.self, from: data)
-        return Contact(id: resp.contactId, name: resp.name, handle: resp.handle ?? "", totalDebriefs: 0)
+        return Contact(id: resp.contactId, name: resp.name, handle: resp.handle ?? "", totalDebriefs: 0, phoneNumbers: [], emailAddresses: [])
     }
     
     // MARK: - Debriefs
@@ -138,10 +138,10 @@ class APIService {
         )
     }
     
-    func createDebrief(audioUrl: URL, contactId: String, duration: TimeInterval) async throws -> Debrief {
+    func createDebrief(audioUrl: URL, contact: Contact, duration: TimeInterval) async throws -> Debrief {
         // Convert to Int seconds for API
         let durationSec = Int(duration)
-        guard let url = URL(string: "\(baseURL)/debriefs?contactId=\(contactId)&durationSec=\(durationSec)") else {
+        guard let url = URL(string: "\(baseURL)/debriefs") else {
             throw APIError.invalidURL
         }
         
@@ -154,13 +154,38 @@ class APIService {
         if let user = Auth.auth().currentUser {
             let token = try await user.getIDToken()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        } else {
-             // Handle unauthenticated case, maybe throw error or proceed in some dev mode if applicable
         }
         
         var data = Data()
         
-        // Add Audio Data
+        // --- Add Contact Fields ---
+        
+        func append(_ value: String, name: String) {
+            data.append("--\(boundary)\r\n".data(using: .utf8)!)
+            data.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            data.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        
+        // 1. Phone Numbers (Priority: use first available)
+        if let phone = contact.phoneNumbers.first {
+             append(normalizePhoneNumber(phone), name: "phoneNumber")
+        }
+        
+        // 2. Email (Priority: use first available)
+        if let email = contact.emailAddresses.first {
+             append(email.lowercased(), name: "email")
+        }
+        
+        // 3. Contact Name (Display)
+        append(contact.name, name: "contactName")
+        
+        // 4. Contact ID (Device ID)
+        append(contact.id, name: "contactId")
+        
+        // Duration
+        append("\(durationSec)", name: "durationSec")
+        
+        // --- Add Audio Data ---
         if let audioData = try? Data(contentsOf: audioUrl) {
             data.append("--\(boundary)\r\n".data(using: .utf8)!)
             data.append("Content-Disposition: form-data; name=\"audio\"; filename=\"recording.m4a\"\r\n".data(using: .utf8)!)
@@ -270,6 +295,22 @@ class APIService {
     }
     
     // MARK: - Helpers
+    
+    private func normalizePhoneNumber(_ phone: String) -> String {
+        // Remove all non-digit characters except leading +
+        var normalized = phone.filter { $0.isNumber || $0 == "+" }
+
+        // Ensure country code (default to +1 for US if missing)
+        if !normalized.hasPrefix("+") {
+            if normalized.count == 10 {
+                normalized = "+1" + normalized  // US number
+            } else {
+                normalized = "+" + normalized
+            }
+        }
+
+        return normalized
+    }
     
     func performRequest<T: Decodable>(endpoint: String, method: String = "GET", body: Data? = nil, headers: [String: String] = [:]) async throws -> T {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {

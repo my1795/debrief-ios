@@ -167,7 +167,9 @@ class TimelineViewModel: ObservableObject {
                 id: debrief.contactId,
                 name: name,
                 handle: nil,
-                totalDebriefs: 0 // Not critical here
+                totalDebriefs: 0, // Not critical here
+                phoneNumbers: [],
+                emailAddresses: []
             )
             contacts.append(contact)
             if contacts.count >= 10 { break }

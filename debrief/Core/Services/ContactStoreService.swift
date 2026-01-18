@@ -32,7 +32,9 @@ class ContactStoreService: ContactStoreServiceProtocol {
             CNContactFamilyNameKey,
             CNContactOrganizationNameKey,
             CNContactIdentifierKey,
-            CNContactJobTitleKey
+            CNContactJobTitleKey,
+            CNContactPhoneNumbersKey,
+            CNContactEmailAddressesKey
         ] as [CNKeyDescriptor]
         
         let request = CNContactFetchRequest(keysToFetch: keys)
@@ -53,7 +55,9 @@ class ContactStoreService: ContactStoreServiceProtocol {
                 id: cnContact.identifier,
                 name: displayName,
                 handle: handle.isEmpty ? nil : handle,
-                totalDebriefs: 0 // Local contacts start with 0 history until matched
+                totalDebriefs: 0, // Local contacts start with 0 history until matched
+                phoneNumbers: cnContact.phoneNumbers.map { $0.value.stringValue },
+                emailAddresses: cnContact.emailAddresses.map { $0.value as String }
             )
             contacts.append(contact)
         }

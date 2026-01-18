@@ -12,6 +12,8 @@ struct Contact: Identifiable, Codable {
     let name: String
     let handle: String?
     let totalDebriefs: Int
+    let phoneNumbers: [String]
+    let emailAddresses: [String]
     
     // For mock data convenience
     var contactId: String { id }
