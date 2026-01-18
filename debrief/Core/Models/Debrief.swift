@@ -29,6 +29,9 @@ struct Debrief: Identifiable, Codable {
     let actionItems: [String]?
     let audioUrl: String?
     let audioStoragePath: String?
+    let encrypted: Bool
+    let phoneNumber: String?
+    let email: String?
     
     // Alias `id` to `debriefId` for easier access when checking raw data consistency
     var debriefId: String { id }
@@ -36,7 +39,7 @@ struct Debrief: Identifiable, Codable {
     // MARK: - Coding Keys
     enum CodingKeys: String, CodingKey {
         case id = "debriefId"
-        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath
+        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath, encrypted, phoneNumber, email
         case audioDurationSec // Legacy/Alternate key from backend
     }
     
@@ -57,6 +60,9 @@ struct Debrief: Identifiable, Codable {
         actionItems = try container.decodeIfPresent([String].self, forKey: .actionItems)
         audioUrl = try container.decodeIfPresent(String.self, forKey: .audioUrl)
         audioStoragePath = try container.decodeIfPresent(String.self, forKey: .audioStoragePath)
+        encrypted = try container.decodeIfPresent(Bool.self, forKey: .encrypted) ?? false
+        phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
         
         // Complex Decoding Helpers
         occurredAt = try Debrief.decodeDate(from: container)
@@ -80,10 +86,13 @@ struct Debrief: Identifiable, Codable {
         try container.encodeIfPresent(actionItems, forKey: .actionItems)
         try container.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try container.encodeIfPresent(audioStoragePath, forKey: .audioStoragePath)
+        try container.encode(encrypted, forKey: .encrypted)
+        try container.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
+        try container.encodeIfPresent(email, forKey: .email)
     }
     
     // MARK: - Manual Initializer
-    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil) {
+    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, phoneNumber: String? = nil, email: String? = nil) {
         self.id = id
         self.userId = userId
         self.contactId = contactId
@@ -96,6 +105,9 @@ struct Debrief: Identifiable, Codable {
         self.actionItems = actionItems
         self.audioUrl = audioUrl
         self.audioStoragePath = audioStoragePath
+        self.encrypted = encrypted
+        self.phoneNumber = phoneNumber
+        self.email = email
     }
 }
 

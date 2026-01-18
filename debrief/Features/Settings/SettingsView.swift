@@ -285,7 +285,7 @@ struct BulletPoint: View {
 struct PrivacyBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: "shield.check.fill")
+            Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 32))
                 .foregroundStyle(Color(hex: "5EEAD4")) // teal-300
             

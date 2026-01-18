@@ -64,7 +64,10 @@ class FirestoreService {
             try? document.data(as: Debrief.self)
         }
         
-        return FetchResult(debriefs: debriefs, lastDocument: snapshot.documents.last)
+        // Decrypt if needed
+        let decryptedDebriefs = decryptIfNeeded(debriefs, userId: userId)
+        
+        return FetchResult(debriefs: decryptedDebriefs, lastDocument: snapshot.documents.last)
     }
     
     private init() {
@@ -198,7 +201,8 @@ class FirestoreService {
             throw NSError(domain: "FirestoreService", code: 403, userInfo: [NSLocalizedDescriptionKey: "Unauthorized access to debrief"])
         }
         
-        return debrief
+        // Decrypt if needed
+        return decryptIfNeeded(debrief, userId: userId)
     }
     
     // MARK: - Real-time Debrief Observation
@@ -218,7 +222,11 @@ class FirestoreService {
                 }
                 
                 do {
-                    let debrief = try document.data(as: Debrief.self)
+                    var debrief = try document.data(as: Debrief.self)
+                    
+                    // Decrypt if needed (using the debrief's userId)
+                    debrief = self.decryptIfNeeded(debrief, userId: debrief.userId)
+                    
                     completion(.success(debrief))
                 } catch {
                     print("❌ [FirestoreService] Failed to decode debrief update: \(error)")
@@ -438,5 +446,65 @@ class FirestoreService {
                 uniqueContacts: contactIds.count
             )
         }.value
+    }
+    
+    // MARK: - Encryption Support
+    
+    /// Decrypts encrypted fields in a Debrief if encryption key is available.
+    /// Returns the original debrief unchanged if not encrypted or key is missing.
+    func decryptIfNeeded(_ debrief: Debrief, userId: String) -> Debrief {
+        // Skip if not encrypted
+        guard debrief.encrypted else {
+            return debrief
+        }
+        
+        // Get encryption key
+        guard let key = EncryptionKeyManager.shared.getKey(userId: userId) else {
+            print("⚠️ [FirestoreService] No encryption key available for decryption")
+            return debrief
+        }
+        
+        let encryptionService = EncryptionService.shared
+        
+        // Decrypt fields
+        let decryptedSummary = encryptionService.decryptIfNeeded(debrief.summary, using: key)
+        let decryptedTranscript = encryptionService.decryptIfNeeded(debrief.transcript, using: key)
+        let decryptedActionItems = encryptionService.decryptIfNeeded(debrief.actionItems, using: key)
+        
+        // Return new Debrief with decrypted values
+        return Debrief(
+            id: debrief.id,
+            userId: debrief.userId,
+            contactId: debrief.contactId,
+            contactName: debrief.contactName,
+            occurredAt: debrief.occurredAt,
+            duration: debrief.duration,
+            status: debrief.status,
+            summary: decryptedSummary,
+            transcript: decryptedTranscript,
+            actionItems: decryptedActionItems,
+            audioUrl: debrief.audioUrl,
+            audioStoragePath: debrief.audioStoragePath,
+            encrypted: false, // Mark as decrypted locally
+            phoneNumber: debrief.phoneNumber,
+            email: debrief.email
+        )
+    }
+    
+    /// Decrypts an array of debriefs.
+    func decryptIfNeeded(_ debriefs: [Debrief], userId: String) -> [Debrief] {
+        return debriefs.map { decryptIfNeeded($0, userId: userId) }
+    }
+    
+    // MARK: - Contact Name Update
+    
+    /// Updates the contactName field in Firebase for a debrief.
+    /// Called when contact is matched by phone/email and we want to persist the resolved name.
+    func updateDebriefContactName(debriefId: String, contactName: String) async throws {
+        try await db.collection("debriefs")
+            .document(debriefId)
+            .updateData(["contactName": contactName])
+        
+        print("✅ [FirestoreService] Updated contactName for \(debriefId) to '\(contactName)'")
     }
 }

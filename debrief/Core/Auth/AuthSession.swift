@@ -52,6 +52,11 @@ class AuthSession: ObservableObject {
                 photoURL: authUser.photoURL
             )
             self.isAuthenticated = true
+            
+            // Ensure encryption key is available (recovery on app launch)
+            Task {
+                await EncryptionKeyManager.shared.ensureKeyAvailable(userId: authUser.id)
+            }
         } else {
             print("👋 [AuthSession] User is signed out")
             self.user = nil
@@ -64,8 +69,11 @@ class AuthSession: ObservableObject {
         error = nil
         
         do {
-            let _ = try await authService.signInWithGoogle()
+            let authUser = try await authService.signInWithGoogle()
             // State update handled by listener
+            
+            // Fetch and store encryption key after successful login
+            try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
         } catch {
             print("❌ [AuthSession] Sign In Error: \(error)")
             self.error = error
@@ -75,7 +83,13 @@ class AuthSession: ObservableObject {
     }
     
     func signOut() {
+        // Get user ID before signing out for key cleanup
+        let userId = user?.id
+        
         do {
+            // Clear encryption key first
+            EncryptionKeyManager.shared.clearKey(userId: userId)
+            
             try authService.signOut()
         } catch {
             print("❌ [AuthSession] Sign Out Error: \(error)")

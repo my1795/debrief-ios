@@ -216,6 +216,54 @@ class APIService {
         fatalError("Should use the existing implementation") 
     }
     
+    // MARK: - Encryption
+    
+    /// Exchanges Firebase ID token for user's encryption key.
+    /// Call once after login, store key in Keychain.
+    /// - Returns: EncryptionKeyResponse containing the base64-encoded key
+    /// - Throws: APIError.serverError(503) if encryption is disabled on server
+    func exchangeKey() async throws -> EncryptionKeyResponse {
+        guard let url = URL(string: "\(baseURL)/auth/exchange-key") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Must have authenticated user
+        guard let user = Auth.auth().currentUser else {
+            print("❌ [APIService] exchangeKey: No authenticated user")
+            throw APIError.invalidResponse
+        }
+        
+        let token = try await user.getIDToken()
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔐 [APIService] POST /auth/exchange-key")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        // Handle 503 (encryption disabled on server)
+        if httpResponse.statusCode == 503 {
+            print("⚠️ [APIService] Encryption not enabled on server (503)")
+            throw APIError.serverError(503)
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
+        return try decoder.decode(EncryptionKeyResponse.self, from: data)
+    }
+    
     // MARK: - Stats
     
     func getStatsOverview() async throws -> OverviewResponse {
