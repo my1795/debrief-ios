@@ -27,6 +27,7 @@ class TimelineViewModel: ObservableObject {
     private var hasMore = true
     private let pageSize = 20
     private var isFetching = false // Lock to prevent duplicate calls
+    private var loadTask: Task<Void, Never>?  // For cancellation
     
     private let firestoreService = FirestoreService.shared
     private var cancellables = Set<AnyCancellable>()
@@ -92,7 +93,9 @@ class TimelineViewModel: ObservableObject {
     }
     
     func loadData(userId: String, refresh: Bool = false) async {
+        // Cancel any in-flight task on refresh
         if refresh {
+            loadTask?.cancel()
             lastDocument = nil
             hasMore = true
             debriefs = []
@@ -106,12 +109,18 @@ class TimelineViewModel: ObservableObject {
         if debriefs.isEmpty { isLoading = true }
         
         do {
+            // Check for cancellation before async work
+            try Task.checkCancellation()
+            
             let result = try await firestoreService.fetchDebriefs(
                 userId: userId,
                 filters: filters,
                 limit: pageSize,
                 startAfter: lastDocument
             )
+            
+            // Check for cancellation after async work
+            try Task.checkCancellation()
             
             // Resolve Names locally (Address Book lookup)
             let resolvedDebriefs = await resolveNames(for: result.debriefs)
@@ -132,8 +141,12 @@ class TimelineViewModel: ObservableObject {
             
             self.groupDebriefsByDate()
             
+        } catch is CancellationError {
+            // Task was cancelled, ignore silently
+            print("📛 [TimelineViewModel] Task cancelled")
         } catch {
             print("❌ [TimelineViewModel] Failed to load data: \(error)")
+            self.error = AppError.from(error)
         }
         
         isLoading = false

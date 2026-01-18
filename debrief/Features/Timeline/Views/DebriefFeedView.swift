@@ -30,38 +30,10 @@ struct DebriefFeedView: View {
                             Spacer()
                             
                             // Daily Stats Pill
-                            HStack(spacing: 6) {
-                                HStack(spacing: 4) {
-                                    Text("📝")
-                                    Text("\(viewModel.dailyStats.todayDebriefs)")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    Text("/")
-                                        .foregroundStyle(.white.opacity(0.6))
-                                    Text("📞")
-                                    Text("\(viewModel.dailyStats.todayCalls)")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                
-                                HStack(spacing: 4) {
-                                    Text("⏱️")
-                                    Text("\(viewModel.dailyStats.todayMins)")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    Text("min")
-                                        .foregroundStyle(.white.opacity(0.6))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .font(.caption)
+                            GroupedStatsPillView(
+                                leftItems: [("📝", "\(viewModel.dailyStats.todayDebriefs)"), ("📞", "\(viewModel.dailyStats.todayCalls)")],
+                                rightItems: [("⏱️", "\(viewModel.dailyStats.todayMins)", "min")]
+                            )
                         }
                         .padding(.horizontal)
                         .padding(.top, 16)

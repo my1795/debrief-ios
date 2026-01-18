@@ -21,6 +21,7 @@ class ContactDetailViewModel: ObservableObject {
     private var isFetching = false
     private let pageSize = 20
     private var cancellables = Set<AnyCancellable>()
+    private var loadTask: Task<Void, Never>?  // For cancellation
     
     let contact: Contact
     
@@ -69,16 +70,16 @@ class ContactDetailViewModel: ObservableObject {
         guard !isFetching else { return }
         
         if refresh {
+            // Cancel any in-flight task
+            loadTask?.cancel()
             isFetching = true 
             lastDocument = nil
             hasMore = true
-            // Don't clear debriefs immediately to prevent flicker, unless search changed significantly?
-            // Actually, for search/filter, we should clear.
-             withAnimation { self.debriefs = [] }
-             self.isLoading = true
-             // Fetch stats concurrently
-             async let stats = fetchStats()
-             _ = await stats
+            withAnimation { self.debriefs = [] }
+            self.isLoading = true
+            // Fetch stats concurrently
+            async let stats = fetchStats()
+            _ = await stats
         }
         
         guard hasMore else { 
@@ -90,6 +91,8 @@ class ContactDetailViewModel: ObservableObject {
         if !refresh { isFetching = true }
 
         do {
+            // Check for cancellation
+            try Task.checkCancellation()
             let userId = AuthSession.shared.user?.id ?? ""
             guard !userId.isEmpty else { return }
             
@@ -153,6 +156,9 @@ class ContactDetailViewModel: ObservableObject {
             self.lastDocument = result.lastDocument
             self.hasMore = result.debriefs.count == pageSize
             
+        } catch is CancellationError {
+            // Task was cancelled, ignore silently
+            print("📛 [ContactDetailViewModel] Task cancelled")
         } catch {
             print("Error fetch: \(error)")
             self.error = AppError.from(error)

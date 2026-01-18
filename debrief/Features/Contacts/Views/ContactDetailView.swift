@@ -107,15 +107,7 @@ struct ContactDetailView: View {
                                     Spacer()
                                 }
                             } else if viewModel.debriefs.isEmpty && !viewModel.isLoading {
-                                VStack(spacing: 12) {
-                                    Image(systemName: "bubble.left.and.bubble.right")
-                                        .font(.largeTitle)
-                                        .foregroundStyle(.white.opacity(0.3))
-                                    Text("No recorded debriefs yet")
-                                        .foregroundStyle(.white.opacity(0.5))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
+                                EmptyStateView.noDebriefs()
                             } else {
                                 // List
                                 let section = TimelineViewModel.TimelineSection(
