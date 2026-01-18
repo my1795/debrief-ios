@@ -14,6 +14,10 @@ struct DebriefDetailView: View {
     @State private var isExporting = false
     @State private var showFullTranscript = false
     
+    // Action Items Selection
+    @State private var selectedActionItemIndices: Set<Int> = []
+    @State private var showReminderSheet = false
+    
     init(debrief: Debrief, userId: String) {
         _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief, userId: userId))
     }
@@ -124,6 +128,23 @@ struct DebriefDetailView: View {
                 TranscriptFullScreenView(transcript: transcript)
             }
         }
+        .sheet(isPresented: $showReminderSheet) {
+            ReminderDatePickerSheet(
+                selectedItems: selectedActionItems,
+                contactName: viewModel.debrief.contactName,
+                onDismiss: {
+                    showReminderSheet = false
+                },
+                onConfirm: { _ in
+                    showReminderSheet = false
+                    // Clear selection after creating reminders
+                    withAnimation(.spring(response: 0.3)) {
+                        selectedActionItemIndices.removeAll()
+                    }
+                }
+            )
+            .modifier(LargeSheetModifier())
+        }
     }
     
     // MARK: - Subviews
@@ -181,6 +202,14 @@ struct DebriefDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.3)))
     }
     
+    // Computed property for selected action item texts
+    private var selectedActionItems: [String] {
+        guard let items = viewModel.debrief.actionItems else { return [] }
+        return selectedActionItemIndices.sorted().compactMap { index in
+            index < items.count ? items[index] : nil
+        }
+    }
+    
     private var actionItemsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -188,19 +217,46 @@ struct DebriefDetailView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
+                
+                // Selection hint
+                if let items = viewModel.debrief.actionItems, !items.isEmpty {
+                    if selectedActionItemIndices.isEmpty {
+                        Text("Tap to select")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.4))
+                    } else {
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                selectedActionItemIndices.removeAll()
+                            }
+                        } label: {
+                            Text("Clear")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color(hex: "5EEAD4"))
+                        }
+                    }
+                }
             }
             
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let items = viewModel.debrief.actionItems, !items.isEmpty {
-                    ForEach(items, id: \.self) { item in
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "circle")
-                                .foregroundStyle(Color(hex: "5EEAD4"))
-                                .padding(.top, 2)
-                            Text(item)
-                                .foregroundColor(.white.opacity(0.9))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        SelectableActionItemRow(
+                            item: item,
+                            isSelected: selectedActionItemIndices.contains(index),
+                            onTap: {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                    if selectedActionItemIndices.contains(index) {
+                                        selectedActionItemIndices.remove(index)
+                                    } else {
+                                        selectedActionItemIndices.insert(index)
+                                    }
+                                }
+                                // Haptic feedback
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                            }
+                        )
                     }
                 } else {
                     HStack {
@@ -215,13 +271,41 @@ struct DebriefDetailView: View {
                     .padding(.vertical, 12)
                 }
             }
+            
+            // Inline Reminder Button (appears when items selected)
+            if !selectedActionItemIndices.isEmpty {
+                Button {
+                    showReminderSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Set Reminder for \(selectedActionItemIndices.count) \(selectedActionItemIndices.count == 1 ? "Item" : "Items")")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: "14B8A6"), Color(hex: "0D9488")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
         .padding()
         .background(.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedActionItemIndices.count)
     }
     
+
     private func detailSection(title: String, content: String, font: Font = .body) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
@@ -412,6 +496,70 @@ struct TranscriptFullScreenView: View {
                         .textSelection(.enabled) // Allow copying
                 }
             }
+        }
+    }
+}
+
+// MARK: - Selectable Action Item Row
+
+struct SelectableActionItemRow: View {
+    let item: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 12) {
+                // Selection Circle
+                ZStack {
+                    Circle()
+                        .stroke(Color(hex: "5EEAD4"), lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                    
+                    if isSelected {
+                        Circle()
+                            .fill(Color(hex: "5EEAD4"))
+                            .frame(width: 24, height: 24)
+                        
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color(hex: "134E4A"))
+                    }
+                }
+                .padding(.top, 2)
+                
+                // Item Text
+                Text(item)
+                    .foregroundColor(.white.opacity(isSelected ? 1.0 : 0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                
+                Spacer()
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? Color(hex: "5EEAD4").opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color(hex: "5EEAD4").opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Sheet Modifier for iOS 15 Compatibility
+
+struct LargeSheetModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .presentationDetents([.large])
+        } else {
+            content
         }
     }
 }

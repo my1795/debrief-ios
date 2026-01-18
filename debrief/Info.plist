@@ -21,5 +21,7 @@
 	<string>Debrief</string>
 	<key>CFBundleName</key>
 	<string>Debrief</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Debrief needs access to Reminders to save your action items as reminders.</string>
 </dict>
 </plist>
