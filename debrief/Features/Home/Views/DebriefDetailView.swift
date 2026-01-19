@@ -101,7 +101,7 @@ struct DebriefDetailView: View {
                         
                     }
                     .padding()
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 100) // Extra padding to clear tab bar with record button
                 }
             }
             
@@ -386,7 +386,7 @@ struct DebriefDetailView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .frame(height: 50)
                     .background(Color(hex: "0F766E")) // teal-700
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
@@ -400,12 +400,12 @@ struct DebriefDetailView: View {
                 Image(systemName: "trash")
                     .font(.headline)
                     .foregroundColor(Color(hex: "FECACA"))
-                    .frame(width: 50)
-                    .padding()
+                    .frame(width: 56, height: 50)
                     .background(Color.red.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

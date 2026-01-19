@@ -56,158 +56,162 @@ struct ReminderDatePickerSheet: View {
                 // Background
                 Color(hex: "134E4A").ignoresSafeArea()
                 
-                VStack(spacing: 24) {
-                    // Header - Selected Items
-                    VStack(spacing: 8) {
-                        Image(systemName: "bell.badge.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(Color(hex: "5EEAD4"))
-                        
-                        Text("\(selectedItems.count) \(selectedItems.count == 1 ? "item" : "items") selected")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.top)
-                    
-                    // Selected Items Preview (scrollable if many)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(selectedItems.prefix(5), id: \.self) { item in
-                                Text(item)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.1))
-                                    .clipShape(Capsule())
-                                    .foregroundStyle(.white.opacity(0.8))
-                            }
-                            if selectedItems.count > 5 {
-                                Text("+\(selectedItems.count - 5) more")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header - Selected Items
+                        VStack(spacing: 8) {
+                            Image(systemName: "bell.badge.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(Color(hex: "5EEAD4"))
+                            
+                            Text("\(selectedItems.count) \(selectedItems.count == 1 ? "item" : "items") selected")
+                                .font(.headline)
+                                .foregroundStyle(.white)
                         }
-                        .padding(.horizontal)
-                    }
-                    
-                    Divider()
-                        .background(.white.opacity(0.2))
-                        .padding(.horizontal)
-                    
-                    // Quick Options
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("When to remind?")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .padding(.horizontal)
+                        .padding(.top)
                         
-                        HStack(spacing: 12) {
-                            ForEach(QuickOption.allCases, id: \.self) { option in
-                                QuickOptionButton(
-                                    option: option,
-                                    isSelected: selectedQuickOption == option && !useCustomDate,
-                                    action: {
-                                        withAnimation(.spring(response: 0.3)) {
-                                            selectedQuickOption = option
-                                            useCustomDate = false
-                                            selectedDate = option.date
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                    
-                    // Custom Date
-                    VStack(spacing: 12) {
-                        Button {
-                            withAnimation(.spring(response: 0.3)) {
-                                useCustomDate.toggle()
-                                if useCustomDate {
-                                    selectedQuickOption = nil
+                        // Selected Items Preview (scrollable if many)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(selectedItems.prefix(5), id: \.self) { item in
+                                    Text(item)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.white.opacity(0.1))
+                                        .clipShape(Capsule())
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                                if selectedItems.count > 5 {
+                                    Text("+\(selectedItems.count - 5) more")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.5))
                                 }
                             }
-                        } label: {
-                            HStack {
-                                Image(systemName: "calendar.badge.clock")
-                                Text("Custom Date & Time")
-                                Spacer()
-                                Image(systemName: useCustomDate ? "chevron.up" : "chevron.down")
-                                    .font(.caption)
-                            }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(useCustomDate ? Color(hex: "5EEAD4") : .white.opacity(0.7))
-                            .padding()
-                            .background(useCustomDate ? Color.white.opacity(0.1) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        .padding(.horizontal)
-                        
-                        if useCustomDate {
-                            DatePicker(
-                                "Select Date",
-                                selection: $selectedDate,
-                                in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                            .datePickerStyle(.graphical)
-                            .tint(Color(hex: "14B8A6"))
-                            .colorScheme(.light) // Force light mode for better readability
-                            .padding()
-                            .background(Color.white.opacity(0.95))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
                             .padding(.horizontal)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                    }
-                    
-                    Spacer()
-                    
-                    // Selected Date Summary
-                    VStack(spacing: 4) {
-                        Text("Reminder set for:")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
                         
-                        Text(formattedSelectedDate)
-                            .font(.headline)
-                            .foregroundStyle(Color(hex: "5EEAD4"))
-                    }
-                    .padding(.vertical, 8)
-                    
-                    // Confirm Button
-                    Button {
-                        createReminders()
-                    } label: {
-                        HStack(spacing: 8) {
-                            if isCreating {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "bell.fill")
-                                Text("Create \(selectedItems.count == 1 ? "Reminder" : "Reminders")")
-                                    .fontWeight(.semibold)
+                        Divider()
+                            .background(.white.opacity(0.2))
+                            .padding(.horizontal)
+                        
+                        // Quick Options
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("When to remind?")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .padding(.horizontal)
+                            
+                            HStack(spacing: 12) {
+                                ForEach(QuickOption.allCases, id: \.self) { option in
+                                    QuickOptionButton(
+                                        option: option,
+                                        isSelected: selectedQuickOption == option && !useCustomDate,
+                                        action: {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                selectedQuickOption = option
+                                                useCustomDate = false
+                                                selectedDate = option.date
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        // Custom Date
+                        VStack(spacing: 12) {
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    useCustomDate.toggle()
+                                    if useCustomDate {
+                                        selectedQuickOption = nil
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "calendar.badge.clock")
+                                    Text("Custom Date & Time")
+                                    Spacer()
+                                    Image(systemName: useCustomDate ? "chevron.up" : "chevron.down")
+                                        .font(.caption)
+                                }
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(useCustomDate ? Color(hex: "5EEAD4") : .white.opacity(0.7))
+                                .padding()
+                                .background(useCustomDate ? Color.white.opacity(0.1) : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .padding(.horizontal)
+                            
+                            if useCustomDate {
+                                DatePicker(
+                                    "Select Date",
+                                    selection: $selectedDate,
+                                    in: Date()...,
+                                    displayedComponents: [.date, .hourAndMinute]
+                                )
+                                .datePickerStyle(.graphical)
+                                .tint(Color(hex: "14B8A6"))
+                                .colorScheme(.light)
+                                .frame(minHeight: 350)
+                                .padding()
+                                .background(Color.white.opacity(0.95))
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .padding(.horizontal)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                         }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "14B8A6"), Color(hex: "0D9488")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: Color(hex: "14B8A6").opacity(0.3), radius: 8, y: 4)
+                        
+                        // Selected Date Summary
+                        VStack(spacing: 4) {
+                            Text("Reminder set for:")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.5))
+                            
+                            Text(formattedSelectedDate)
+                                .font(.headline)
+                                .foregroundStyle(Color(hex: "5EEAD4"))
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.bottom, 80) // Space for fixed button
                     }
-                    .disabled(isCreating)
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                // Fixed Confirm Button
+                Button {
+                    createReminders()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isCreating {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "bell.fill")
+                            Text("Create \(selectedItems.count == 1 ? "Reminder" : "Reminders")")
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: "14B8A6"), Color(hex: "0D9488")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: Color(hex: "14B8A6").opacity(0.3), radius: 8, y: 4)
+                }
+                .disabled(isCreating)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .background(Color(hex: "134E4A"))
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
