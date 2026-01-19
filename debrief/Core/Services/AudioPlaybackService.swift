@@ -8,6 +8,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var decryptionError: Error?
+    @Published var playbackRate: Float = 1.0  // 1.0, 1.5, 2.0
     
     // Remote Player (Streaming)
     private var avPlayer: AVPlayer?
@@ -197,6 +198,17 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         currentTime = time
     }
+    
+    @MainActor
+    func setPlaybackRate(_ rate: Float) {
+        playbackRate = rate
+        
+        if let player = avPlayer {
+            player.rate = rate
+        } else if let player = audioPlayer {
+            player.rate = rate
+        }
+    }
 
     // MARK: - Private Helpers (AVAudioPlayer)
     
@@ -205,7 +217,9 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
         // Initialize player with DATA
         audioPlayer = try AVAudioPlayer(data: data)
         audioPlayer?.delegate = self
+        audioPlayer?.enableRate = true  // Enable playback speed adjustment
         audioPlayer?.prepareToPlay()
+        audioPlayer?.rate = playbackRate  // Apply current rate
         duration = audioPlayer?.duration ?? 0
         
         print("🎵 [AudioPlayback] AVAudioPlayer ready. Duration: \(duration)")
@@ -218,7 +232,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateTime()
             }

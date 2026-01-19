@@ -19,6 +19,11 @@ class DebriefDetailViewModel: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var isLoading: Bool = false // Audio loading state
     
+    // Audio Player Progress
+    @Published var currentTime: TimeInterval = 0
+    @Published var audioDuration: TimeInterval = 0
+    @Published var playbackRate: Float = 1.0
+    
     // Services
     private let apiService: APIService
     private let firestoreService: FirestoreService
@@ -65,6 +70,25 @@ class DebriefDetailViewModel: ObservableObject {
                 if let error = error {
                     self?.errorMessage = "Playback failed: \(error.localizedDescription)"
                 }
+            }
+            .store(in: &cancellables)
+        
+        // Sync Audio Progress
+        audioService.$currentTime
+            .sink { [weak self] time in
+                self?.currentTime = time
+            }
+            .store(in: &cancellables)
+        
+        audioService.$duration
+            .sink { [weak self] duration in
+                self?.audioDuration = duration
+            }
+            .store(in: &cancellables)
+        
+        audioService.$playbackRate
+            .sink { [weak self] rate in
+                self?.playbackRate = rate
             }
             .store(in: &cancellables)
             
@@ -272,6 +296,21 @@ class DebriefDetailViewModel: ObservableObject {
                 audioService.toggle(url: url)
             }
         }
+    }
+    
+    // MARK: - Audio Controls
+    
+    func seekAudio(to time: TimeInterval) {
+        audioService.seek(to: time)
+    }
+    
+    func setPlaybackRate(_ rate: Float) {
+        audioService.setPlaybackRate(rate)
+    }
+    
+    /// Stops audio playback. Call on view disappear.
+    func stopAudio() {
+        audioService.stop()
     }
     
     var shareableText: String {

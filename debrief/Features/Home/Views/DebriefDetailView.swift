@@ -157,6 +157,9 @@ struct DebriefDetailView: View {
             )
             .modifier(MediumSheetModifier())
         }
+        .onDisappear {
+            viewModel.stopAudio()
+        }
     }
     
     // MARK: - Subviews
@@ -401,43 +404,79 @@ struct DebriefDetailView: View {
                 .foregroundColor(.white)
             
             if let _ = viewModel.debrief.audioUrl {
-                HStack(spacing: 16) {
-                    // Play/Pause/Loading Button
-                    Button {
-                        viewModel.toggleAudio()
-                    } label: {
-                        ZStack {
-                            if viewModel.isLoading {
-                                // Loading spinner
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "2DD4BF")))
-                                    .scaleEffect(1.5)
-                                    .frame(width: 48, height: 48)
-                            } else {
-                                Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                    .font(.system(size: 48))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(Color(hex: "2DD4BF"), .white)
+                VStack(spacing: 12) {
+                    HStack(spacing: 16) {
+                        // Play/Pause/Loading Button
+                        Button {
+                            viewModel.toggleAudio()
+                        } label: {
+                            ZStack {
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "2DD4BF")))
+                                        .scaleEffect(1.2)
+                                        .frame(width: 44, height: 44)
+                                } else {
+                                    Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                        .font(.system(size: 44))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(Color(hex: "2DD4BF"), .white)
+                                }
                             }
                         }
-                    }
-                    .disabled(viewModel.isLoading)
-                    
-                    VStack(spacing: 6) {
-                        // Animated Waveform
-                        AnimatedWaveformView(
-                            isPlaying: viewModel.isPlaying,
-                            isLoading: viewModel.isLoading
-                        )
-                        .frame(height: 32)
+                        .disabled(viewModel.isLoading)
                         
-                        HStack {
-                            Text(audioStatusText)
-                            Spacer()
-                            Text(viewModel.formatDuration(viewModel.debrief.duration))
+                        // Progress Slider
+                        VStack(spacing: 4) {
+                            Slider(
+                                value: Binding(
+                                    get: { viewModel.currentTime },
+                                    set: { viewModel.seekAudio(to: $0) }
+                                ),
+                                in: 0...(max(viewModel.audioDuration, 1))
+                            )
+                            .accentColor(Color(hex: "2DD4BF"))
+                            .animation(.linear(duration: 0.05), value: viewModel.currentTime)
+                            
+                            HStack {
+                                Text(formatTime(viewModel.currentTime))
+                                Spacer()
+                                Text(formatTime(viewModel.audioDuration))
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.6))
                         }
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.6))
+                    }
+                    
+                    // Playback Speed Buttons
+                    HStack(spacing: 8) {
+                        Text("Speed:")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.6))
+                        
+                        ForEach([1.0, 1.5, 2.0], id: \.self) { rate in
+                            Button {
+                                viewModel.setPlaybackRate(Float(rate))
+                            } label: {
+                                Text("\(rate, specifier: rate == 1.0 || rate == 2.0 ? "%.0f" : "%.1f")x")
+                                    .font(.caption.weight(.medium))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        viewModel.playbackRate == Float(rate)
+                                        ? Color(hex: "2DD4BF")
+                                        : Color.white.opacity(0.1)
+                                    )
+                                    .foregroundColor(
+                                        viewModel.playbackRate == Float(rate)
+                                        ? Color.black
+                                        : Color.white
+                                    )
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        
+                        Spacer()
                     }
                 }
             } else {
@@ -458,6 +497,12 @@ struct DebriefDetailView: View {
         .background(.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+    }
+    
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
     
     private var audioStatusText: String {
