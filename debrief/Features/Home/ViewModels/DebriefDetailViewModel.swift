@@ -15,7 +15,8 @@ class DebriefDetailViewModel: ObservableObject {
     @Published var isLoadingDetails: Bool = false
     @Published var isDeleting: Bool = false
     @Published var errorMessage: String?
-    @Published var isPlaying: Bool = false // This will be synced from audioService
+    @Published var isPlaying: Bool = false
+    @Published var isLoading: Bool = false // Audio loading state
     
     // Services
     private let apiService: APIService
@@ -45,6 +46,12 @@ class DebriefDetailViewModel: ObservableObject {
         audioService.$isPlaying
             .sink { [weak self] isPlaying in
                 self?.isPlaying = isPlaying
+            }
+            .store(in: &cancellables)
+        
+        audioService.$isLoading
+            .sink { [weak self] isLoading in
+                self?.isLoading = isLoading
             }
             .store(in: &cancellables)
             

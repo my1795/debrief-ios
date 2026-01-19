@@ -45,23 +45,9 @@ struct RecordView: View {
         VStack {
             Spacer()
             
-            // Pulse Animation Placeholder
-            ZStack {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 120, height: 120)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.red.opacity(0.5), lineWidth: 20)
-                            .scaleEffect(1.1)
-                            .opacity(0.5)
-                    )
-                
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.white)
-            }
-            .padding(.bottom, 32)
+            // Pulsing Recording Animation
+            RecordingPulseView()
+                .padding(.bottom, 32)
             
             Text("Recording...")
                 .font(.title2)

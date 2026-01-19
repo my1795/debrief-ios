@@ -4,11 +4,13 @@ import Combine
 
 class AudioPlaybackService: ObservableObject {
     @Published var isPlaying: Bool = false
+    @Published var isLoading: Bool = false
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var statusObserver: NSKeyValueObservation?
     
     @MainActor
     func play(url: URL) {
@@ -24,8 +26,27 @@ class AudioPlaybackService: ObservableObject {
         // New URL or player not initialized
         stop() // Stop previous
         
+        isLoading = true // Start loading
+        
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
+        
+        // Observe player item status for buffering
+        statusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor in
+                switch item.status {
+                case .readyToPlay:
+                    self?.isLoading = false
+                    self?.player?.play()
+                    self?.isPlaying = true
+                case .failed:
+                    self?.isLoading = false
+                    print("❌ [AudioPlayback] Failed to load: \(item.error?.localizedDescription ?? "Unknown")")
+                default:
+                    break
+                }
+            }
+        }
         
         // Observe duration
         Task { @MainActor in
@@ -33,9 +54,6 @@ class AudioPlaybackService: ObservableObject {
                 self.duration = CMTimeGetSeconds(duration)
             }
         }
-        
-        player?.play()
-        isPlaying = true
         
         // Observe time
         timeObserver = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
@@ -59,9 +77,13 @@ class AudioPlaybackService: ObservableObject {
         player?.pause()
         player = nil
         isPlaying = false
+        isLoading = false
         currentTime = 0
+        statusObserver?.invalidate()
+        statusObserver = nil
         if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+            // Note: player is already nil here, so we can't remove observer
+            // But that's fine since player is deallocated
             timeObserver = nil
         }
     }

@@ -328,28 +328,37 @@ struct DebriefDetailView: View {
             
             if let _ = viewModel.debrief.audioUrl {
                 HStack(spacing: 16) {
+                    // Play/Pause/Loading Button
                     Button {
                         viewModel.toggleAudio()
                     } label: {
-                        Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 48))
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(Color(hex: "2DD4BF"), .white) // teal-400, white
-                    }
-                    
-                    VStack(spacing: 6) {
-                        // Fake Waveform
-                        HStack(spacing: 3) {
-                            ForEach(0..<25) { _ in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color(hex: "5EEAD4").opacity(viewModel.isPlaying ? 0.8 : 0.3))
-                                    .frame(height: .random(in: 10...30))
+                        ZStack {
+                            if viewModel.isLoading {
+                                // Loading spinner
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "2DD4BF")))
+                                    .scaleEffect(1.5)
+                                    .frame(width: 48, height: 48)
+                            } else {
+                                Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.system(size: 48))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(Color(hex: "2DD4BF"), .white)
                             }
                         }
+                    }
+                    .disabled(viewModel.isLoading)
+                    
+                    VStack(spacing: 6) {
+                        // Animated Waveform
+                        AnimatedWaveformView(
+                            isPlaying: viewModel.isPlaying,
+                            isLoading: viewModel.isLoading
+                        )
                         .frame(height: 32)
                         
                         HStack {
-                            Text(viewModel.isPlaying ? "Playing..." : "00:00")
+                            Text(audioStatusText)
                             Spacer()
                             Text(viewModel.formatDuration(viewModel.debrief.duration))
                         }
@@ -375,6 +384,16 @@ struct DebriefDetailView: View {
         .background(.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+    }
+    
+    private var audioStatusText: String {
+        if viewModel.isLoading {
+            return "Loading..."
+        } else if viewModel.isPlaying {
+            return "Playing..."
+        } else {
+            return "00:00"
+        }
     }
     
     private var actionButtons: some View {

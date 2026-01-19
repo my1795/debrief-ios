@@ -2,20 +2,39 @@
 //  AppConfig.swift
 //  debrief
 //
-//  Created by Mustafa Yıldırım on 18/01/2026.
+//  Multi-environment configuration: Local, Stage, Production
 //
 
 import Foundation
 
-enum AppEnvironment {
+/// App environment types
+enum AppEnvironment: String {
     case local
+    case stage
     case production
+    
+    var displayName: String {
+        switch self {
+        case .local: return "Local"
+        case .stage: return "Stage"
+        case .production: return "Production"
+        }
+    }
 }
 
+/// Central configuration for environment-specific settings
 struct AppConfig {
     static let shared = AppConfig()
     
+    /// Current environment - read from Info.plist or fallback to compile-time detection
     var currentEnvironment: AppEnvironment {
+        // First, try to read from Info.plist (set by Build Configuration)
+        if let envString = Bundle.main.infoDictionary?["APP_ENVIRONMENT"] as? String,
+           let env = AppEnvironment(rawValue: envString.lowercased()) {
+            return env
+        }
+        
+        // Fallback to compile-time detection
         #if DEBUG
         return .local
         #else
@@ -23,15 +42,42 @@ struct AppConfig {
         #endif
     }
     
+    /// Backend API base URL
     var apiBaseURL: String {
         switch currentEnvironment {
         case .local:
             return "http://localhost:8080/v1"
-        case .production:
-            // Placeholder: User to update this after backend deployment
+        case .stage:
             return "https://debrief-service-306744525686.us-central1.run.app/v1"
+        case .production:
+            // TODO: Update with production URL when deployed
+            return "https://api.debrief.app/v1"
         }
     }
     
-    private init() {}
+    /// Firebase configuration file name (without .plist extension)
+    var firebaseConfigFileName: String {
+        switch currentEnvironment {
+        case .local, .stage:
+            return "GoogleService-Dev"
+        case .production:
+            return "GoogleService-Prod"
+        }
+    }
+    
+    /// Whether this is a development environment
+    var isDevelopment: Bool {
+        currentEnvironment == .local || currentEnvironment == .stage
+    }
+    
+    /// Whether verbose logging should be enabled
+    var isVerboseLoggingEnabled: Bool {
+        isDevelopment
+    }
+    
+    private init() {
+        // Log current environment on init
+        print("🌍 [AppConfig] Environment: \(currentEnvironment.displayName)")
+        print("📡 [AppConfig] API Base URL: \(apiBaseURL)")
+    }
 }

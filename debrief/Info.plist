@@ -23,5 +23,7 @@
 	<string>Debrief</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Debrief needs access to Reminders to save your action items as reminders.</string>
+	<key>APP_ENVIRONMENT</key>
+	<string>$(APP_ENVIRONMENT)</string>
 </dict>
 </plist>

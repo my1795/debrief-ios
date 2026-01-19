@@ -452,9 +452,17 @@ class FirestoreService {
     
     /// Decrypts encrypted fields in a Debrief if encryption key is available.
     /// Returns the original debrief unchanged if not encrypted or key is missing.
+    /// Detection: Uses v1: prefix on fields OR encrypted flag.
     func decryptIfNeeded(_ debrief: Debrief, userId: String) -> Debrief {
-        // Skip if not encrypted
-        guard debrief.encrypted else {
+        let encryptionService = EncryptionService.shared
+        
+        // Check if any field needs decryption (has v1: prefix or encrypted flag is set)
+        let needsDecryption = debrief.encrypted ||
+            encryptionService.isEncrypted(debrief.summary) ||
+            encryptionService.isEncrypted(debrief.transcript) ||
+            (debrief.actionItems?.contains { encryptionService.isEncrypted($0) } ?? false)
+        
+        guard needsDecryption else {
             return debrief
         }
         
@@ -463,8 +471,6 @@ class FirestoreService {
             print("⚠️ [FirestoreService] No encryption key available for decryption")
             return debrief
         }
-        
-        let encryptionService = EncryptionService.shared
         
         // Decrypt fields
         let decryptedSummary = encryptionService.decryptIfNeeded(debrief.summary, using: key)
