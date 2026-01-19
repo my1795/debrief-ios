@@ -33,6 +33,9 @@ struct AppTheme {
         static let cyan500 = Color(hex: "06B6D4")
         static let cyan600 = Color(hex: "0891B2")
         static let darkGray = Color(hex: "1F2937")
+        static let purple = Color(hex: "A855F7")         // purple-500
+        static let background = Color(hex: "022c22")      // Consistent dark bg
+        static let secondaryBackground = Color(hex: "064E3B") // Slightly lighter
     }
     
     struct Gradients {

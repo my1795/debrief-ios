@@ -89,6 +89,180 @@ class APIService {
         return Contact(id: resp.contactId, name: resp.name, handle: resp.handle ?? "", totalDebriefs: 0, phoneNumbers: [], emailAddresses: [])
     }
     
+    // MARK: - Search
+    
+    private struct EmbeddingRequest: Encodable {
+        let text: String
+    }
+    
+    private struct EmbeddingResponse: Decodable {
+        let embedding: [Double]
+    }
+    
+    func generateEmbedding(text: String) async throws -> [Double] {
+        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
+        
+        guard let url = URL(string: "\(baseURL)/debriefs/embedding") else {
+            throw APIError.invalidURL
+        }
+        
+        if isVerbose {
+            print("🌐 [APIService.generateEmbedding] ========== REQUEST ==========")
+            print("🌐 [APIService.generateEmbedding] URL: \(url.absoluteString)")
+            print("🌐 [APIService.generateEmbedding] Text length: \(text.count) chars")
+            print("🌐 [APIService.generateEmbedding] Text preview: \"\(String(text.prefix(50)))...\"")
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Authorization Header for current user
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if isVerbose {
+                print("🌐 [APIService.generateEmbedding] Auth token: \(String(token.prefix(20)))...")
+            }
+        }
+        
+        let body = EmbeddingRequest(text: text)
+        let bodyDict = ["text": text]
+        request.httpBody = try JSONSerialization.data(withJSONObject: bodyDict)
+        
+        if isVerbose {
+            print("🌐 [APIService.generateEmbedding] ========== REQUEST BODY ==========")
+            print("🌐 [APIService.generateEmbedding] Full query text: \"\(text)\"")
+            if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+                print("🌐 [APIService.generateEmbedding] JSON sent: \(jsonString)")
+            }
+            print("🌐 [APIService.generateEmbedding] Sending request...")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+             throw APIError.invalidResponse
+        }
+        
+        if isVerbose {
+            print("🌐 [APIService.generateEmbedding] ========== RESPONSE ==========")
+            print("🌐 [APIService.generateEmbedding] Status code: \(httpResponse.statusCode)")
+            print("🌐 [APIService.generateEmbedding] Response size: \(data.count) bytes")
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            if isVerbose {
+                if let responseBody = String(data: data, encoding: .utf8) {
+                    print("❌ [APIService.generateEmbedding] Error body: \(responseBody)")
+                }
+            }
+             throw APIError.serverError(httpResponse.statusCode)
+        }
+        
+        let decoder = JSONDecoder()
+        let resp = try decoder.decode(EmbeddingResponse.self, from: data)
+        
+        if isVerbose {
+            print("✅ [APIService.generateEmbedding] Success! Embedding dimensions: \(resp.embedding.count)")
+        }
+        
+        return resp.embedding
+    }
+
+    // MARK: - Semantic Search (Backend)
+    
+    struct SearchResult: Decodable {
+        let debriefId: String
+        let similarity: Double
+        
+        // Backend sends snake_case: debrief_id
+        enum CodingKeys: String, CodingKey {
+            case debriefId = "debrief_id"
+            case similarity
+        }
+    }
+    
+    private struct SearchRequest: Encodable {
+        let query: String
+        let limit: Int
+    }
+    
+    func searchDebriefs(query: String, limit: Int = 10) async throws -> [SearchResult] {
+        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
+        
+        guard let url = URL(string: "\(baseURL)/debriefs/search") else {
+            throw APIError.invalidURL
+        }
+        
+        if isVerbose {
+            print("🔍 [APIService.searchDebriefs] ========== REQUEST ==========")
+            print("🔍 [APIService.searchDebriefs] URL: \(url.absoluteString)")
+            print("🔍 [APIService.searchDebriefs] Query: \"\(query)\"")
+            print("🔍 [APIService.searchDebriefs] Limit: \(limit)")
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Authorization Header
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let encoder = JSONEncoder()
+        request.httpBody = try encoder.encode(SearchRequest(query: query, limit: limit))
+        
+        if isVerbose {
+            if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+                print("🔍 [APIService.searchDebriefs] JSON sent: \(jsonString)")
+            }
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        if isVerbose {
+            print("🔍 [APIService.searchDebriefs] ========== RESPONSE ==========")
+            print("🔍 [APIService.searchDebriefs] Status code: \(httpResponse.statusCode)")
+            print("🔍 [APIService.searchDebriefs] Response size: \(data.count) bytes")
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            if isVerbose {
+                if let responseBody = String(data: data, encoding: .utf8) {
+                    print("❌ [APIService.searchDebriefs] Error body: \(responseBody)")
+                }
+            }
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+        
+        // Log raw response for debugging
+        if isVerbose {
+            if let rawJSON = String(data: data, encoding: .utf8) {
+                print("🔍 [APIService.searchDebriefs] Raw JSON: \(rawJSON)")
+            }
+        }
+        
+        let decoder = JSONDecoder()
+        // Note: Backend uses camelCase (debriefId), no conversion needed
+        let results = try decoder.decode([SearchResult].self, from: data)
+        
+        if isVerbose {
+            print("✅ [APIService.searchDebriefs] Success! Results: \(results.count)")
+            for (i, result) in results.prefix(5).enumerated() {
+                print("   \(i+1). ID: \(result.debriefId), Similarity: \(String(format: "%.3f", result.similarity))")
+            }
+        }
+        
+        return results
+    }
+    
     // MARK: - Debriefs
     
     // Shared DTO for Response (Internal)

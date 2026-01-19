@@ -70,6 +70,54 @@ class FirestoreService {
         return FetchResult(debriefs: decryptedDebriefs, lastDocument: snapshot.documents.last)
     }
     
+    // MARK: - Search Support (Fetch by IDs)
+    
+    /// Fetches debriefs by their IDs, typically after receiving search results from backend.
+    /// Fetches in parallel and decrypts as needed.
+    func fetchDebriefsByIds(_ ids: [String], userId: String) async throws -> [Debrief] {
+        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
+        
+        guard !ids.isEmpty else { return [] }
+        
+        if isVerbose {
+            print("🗄️ [FirestoreService.fetchDebriefsByIds] ========== FETCH ==========")
+            print("🗄️ [FirestoreService.fetchDebriefsByIds] IDs to fetch: \(ids.count)")
+            print("🗄️ [FirestoreService.fetchDebriefsByIds] IDs: \(ids.prefix(5).joined(separator: ", "))...")
+        }
+        
+        // Fetch in parallel using TaskGroup
+        let debriefs = try await withThrowingTaskGroup(of: Debrief?.self) { group in
+            for id in ids {
+                group.addTask {
+                    let doc = try await self.db.collection("debriefs").document(id).getDocument()
+                    return try? doc.data(as: Debrief.self)
+                }
+            }
+            
+            var results: [Debrief] = []
+            for try await debrief in group {
+                if let debrief = debrief {
+                    results.append(debrief)
+                }
+            }
+            return results
+        }
+        
+        if isVerbose {
+            print("🗄️ [FirestoreService.fetchDebriefsByIds] Fetched \(debriefs.count) / \(ids.count) debriefs")
+            print("🗄️ [FirestoreService.fetchDebriefsByIds] Decrypting if needed...")
+        }
+        
+        let result = decryptIfNeeded(debriefs, userId: userId)
+        
+        if isVerbose {
+            print("✅ [FirestoreService.fetchDebriefsByIds] Complete. Returning \(result.count) decrypted debriefs")
+        }
+        
+        return result
+    }
+
+    
     private init() {
         let settings = FirestoreSettings()
         settings.cacheSizeBytes = 100 * 1024 * 1024 // 100MB

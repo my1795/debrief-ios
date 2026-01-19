@@ -48,7 +48,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "138"
             endingLineNumber = "138"
-            landmarkName = "getDebriefs()"
+            landmarkName = "generateEmbedding(text:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

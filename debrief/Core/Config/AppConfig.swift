@@ -70,9 +70,9 @@ struct AppConfig {
         currentEnvironment == .local || currentEnvironment == .stage
     }
     
-    /// Whether verbose logging should be enabled
+    /// Whether verbose logging should be enabled (LOCAL only, not stage or production)
     var isVerboseLoggingEnabled: Bool {
-        isDevelopment
+        currentEnvironment == .local
     }
     
     private init() {

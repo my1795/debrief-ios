@@ -10,6 +10,7 @@ import SwiftUI
 struct DebriefFeedView: View {
     @StateObject private var viewModel = TimelineViewModel()
     @State private var showFilters = false
+    @State private var showSearch = false
     let userId: String // Passed from parent
     
     // For Phase 1: Search is visual or basic local filter (placeholder)
@@ -39,7 +40,21 @@ struct DebriefFeedView: View {
                         .padding(.top, 16)
                         
                         HStack(spacing: 10) {
-                            SearchBar(text: $viewModel.searchText)
+                            // Semantic Search Button (Replacing local SearchBar)
+                            Button {
+                                showSearch = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundColor(Color.white.opacity(0.6))
+                                    Text("Search debriefs...")
+                                        .foregroundColor(Color.white.opacity(0.6))
+                                    Spacer()
+                                }
+                                .padding(10)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(10)
+                            }
                             
                             Button {
                                 showFilters = true
@@ -103,6 +118,9 @@ struct DebriefFeedView: View {
                         )
                     }
                 }
+            }
+            .fullScreenCover(isPresented: $showSearch) {
+                SearchView()
             }
             .onAppear {
                 if viewModel.debriefs.isEmpty {
