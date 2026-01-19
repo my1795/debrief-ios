@@ -214,10 +214,25 @@ class ContactDetailViewModel: ObservableObject {
             if count > 0 {
                 let allDocs = try await baseQuery.getDocuments()
                 let totalDur = allDocs.documents.reduce(0.0) { sum, doc in
-                    let dur = doc.data()["duration"] as? Double 
-                        ?? Double(doc.data()["duration"] as? Int ?? 0)
-                        ?? (doc.data()["audioDurationSec"] as? Double ?? 0)
-                    return sum + dur
+                    let data = doc.data()
+                    
+                    // Try "duration" field first (Double or Int)
+                    if let d = data["duration"] as? Double, d > 0 {
+                        return sum + d
+                    }
+                    if let d = data["duration"] as? Int, d > 0 {
+                        return sum + Double(d)
+                    }
+                    
+                    // Fallback to "audioDurationSec" (legacy field)
+                    if let d = data["audioDurationSec"] as? Double, d > 0 {
+                        return sum + d
+                    }
+                    if let d = data["audioDurationSec"] as? Int, d > 0 {
+                        return sum + Double(d)
+                    }
+                    
+                    return sum
                 }
                 
                 self.totalDuration = totalDur

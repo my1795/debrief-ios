@@ -43,21 +43,21 @@ struct ContactDetailView: View {
                                 value: "\(viewModel.totalDebriefsCount)",
                                 icon: "mic.fill",
                                 color: .teal,
-                                infoText: "Total debriefs recorded. (Sunday-to-Sunday if 'This Week' selected)"
+                                infoText: "Debriefs this week (Sunday to Sunday)."
                             )
                             DetailStatCard(
                                 title: "Last Met",
                                 value: viewModel.lastMetString,
                                 icon: "calendar",
                                 color: .teal,
-                                infoText: "The date of your most recent debrief with this contact."
+                                infoText: "Most recent debrief this week (Sunday to Sunday)."
                             )
                             DetailStatCard(
                                 title: "Duration",
                                 value: formatDuration(viewModel.totalDuration),
                                 icon: "clock",
                                 color: .teal,
-                                infoText: "Total duration of recorded debriefs for the selected period."
+                                infoText: "Total duration this week (Sunday to Sunday)."
                             )
                         }
                         .padding(.horizontal)
