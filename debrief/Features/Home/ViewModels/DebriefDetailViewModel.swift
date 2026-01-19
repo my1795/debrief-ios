@@ -224,8 +224,9 @@ class DebriefDetailViewModel: ObservableObject {
     }
     
     func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
+        let d = max(0, duration)
+        let minutes = Int(d) / 60
+        let seconds = Int(d) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
     

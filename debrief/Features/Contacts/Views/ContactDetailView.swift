@@ -175,10 +175,11 @@ struct ContactDetailView: View {
         }
     }
     func formatDuration(_ duration: TimeInterval) -> String {
-        if duration < 60 {
-            return "\(Int(duration))s"
+        let d = max(0, duration)
+        if d < 60 {
+            return "\(Int(d))s"
         } else {
-            return "\(Int(duration / 60))m"
+            return "\(Int(d / 60))m"
         }
     }
 }

@@ -70,7 +70,7 @@ struct Debrief: Identifiable, Codable {
         
         // Complex Decoding Helpers
         occurredAt = try Debrief.decodeDate(from: container)
-        duration = Debrief.decodeDuration(from: container)
+        duration = max(0, Debrief.decodeDuration(from: container))
     }
     
     // MARK: - Encoder

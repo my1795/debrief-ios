@@ -34,8 +34,10 @@ struct AppConfig {
             return env
         }
         
-        // Fallback to compile-time detection
-        #if DEBUG
+        // Fallback to compile-time detection based on compiler flags
+        #if STAGE
+        return .stage
+        #elseif DEBUG
         return .local
         #else
         return .production
