@@ -52,7 +52,7 @@ struct AddActionItemSheet: View {
                         .foregroundColor(.white)
                         .font(.body)
                         .focused($isFocused)
-                        .lineLimit(3...5)
+                        .lineLimit(2)
                         .padding(14)
                         .background(Color.white.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -60,6 +60,11 @@ struct AddActionItemSheet: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color(hex: "5EEAD4").opacity(0.3), lineWidth: 1)
                         )
+                        .onChange(of: text) { newValue in
+                            if newValue.count > 200 {
+                                text = String(newValue.prefix(200))
+                            }
+                        }
                 } else {
                     // Fallback for iOS < 16: no axis or ranged lineLimit support
                     TextField("What needs to be done?", text: $text)
@@ -73,11 +78,24 @@ struct AddActionItemSheet: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color(hex: "5EEAD4").opacity(0.3), lineWidth: 1)
                         )
+                        .onChange(of: text) { newValue in
+                            if newValue.count > 200 {
+                                text = String(newValue.prefix(200))
+                            }
+                        }
                 }
                 
-                Text("Add tasks, follow-ups, or reminders from your debrief.")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.4))
+                HStack {
+                    Text("Add tasks, follow-ups, or reminders from your debrief.")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.4))
+                    
+                    Spacer()
+                    
+                    Text("\(text.count)/200")
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(text.count >= 200 ? .red : .white.opacity(0.4))
+                }
             }
             .padding()
             

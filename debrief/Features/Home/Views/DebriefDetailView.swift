@@ -746,7 +746,7 @@ struct SwipeableActionItemRow: View {
     }
     
     private var mainContent: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 10) {
             // Checkbox (tap to select for reminder)
             Button(action: {
                 resetSwipe()
@@ -754,16 +754,16 @@ struct SwipeableActionItemRow: View {
             }) {
                 ZStack {
                     Circle()
-                        .stroke(Color(hex: "5EEAD4"), lineWidth: 2)
-                        .frame(width: 26, height: 26)
+                        .stroke(Color(hex: "5EEAD4"), lineWidth: 1.5)
+                        .frame(width: 22, height: 22)
                     
                     if isSelected {
                         Circle()
                             .fill(Color(hex: "5EEAD4"))
-                            .frame(width: 26, height: 26)
+                            .frame(width: 22, height: 22)
                         
                         Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Color(hex: "134E4A"))
                     }
                 }
@@ -778,11 +778,12 @@ struct SwipeableActionItemRow: View {
                 // Tappable text to edit
                 Text(item)
                     .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(4) // Prevent excessive growth
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.subheadline) // Smaller font
+                    .lineLimit(2) // Strict 2-line limit
+                    .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .contentShape(Rectangle()) // Ensure tap area covers the frame
                     .onTapGesture {
                         resetSwipe()
                         onTextTap()
@@ -790,13 +791,13 @@ struct SwipeableActionItemRow: View {
                 
                 // Edit pencil icon hint
                 Image(systemName: "pencil")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.white.opacity(0.3))
                     .padding(.top, 4)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 6) // Reduced padding
+        .padding(.horizontal, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isEditing ? Color(hex: "5EEAD4").opacity(0.08) : 
@@ -824,6 +825,11 @@ struct SwipeableActionItemRow: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color(hex: "5EEAD4").opacity(0.4), lineWidth: 1)
                     )
+                    .onChange(of: editText) { newValue in
+                        if newValue.count > 200 {
+                            editText = String(newValue.prefix(200))
+                        }
+                    }
             } else {
                 // iOS 15 fallback: Use TextEditor for multiline editing
                 TextEditor(text: $editText)
@@ -838,6 +844,19 @@ struct SwipeableActionItemRow: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color(hex: "5EEAD4").opacity(0.4), lineWidth: 1)
                     )
+                    .onChange(of: editText) { newValue in
+                        if newValue.count > 200 {
+                            editText = String(newValue.prefix(200))
+                        }
+                    }
+            }
+            
+            // Character Counter
+            HStack {
+                Spacer()
+                Text("\(editText.count)/200")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(editText.count >= 200 ? .red : .white.opacity(0.4))
             }
             
             HStack(spacing: 10) {
