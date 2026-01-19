@@ -108,6 +108,65 @@ final class EncryptionService {
             decryptIfNeeded(value, using: key) ?? value
         }
     }
+    
+    // MARK: - Encryption
+    
+    /// Encrypts a plaintext string using the provided key.
+    /// - Parameters:
+    ///   - plaintext: The string to encrypt
+    ///   - key: The 32-byte AES key
+    /// - Returns: The encrypted string in format "v1:base64(nonce + ciphertext + tag)"
+    func encrypt(_ plaintext: String, using key: Data) throws -> String {
+        guard let data = plaintext.data(using: .utf8) else {
+            throw EncryptionError.encryptionFailed("Failed to encode string as UTF-8")
+        }
+        
+        let symmetricKey = SymmetricKey(data: key)
+        
+        do {
+            // AES-GCM seal generates random nonce automatically
+            let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
+            
+            // Combine: nonce (12) + ciphertext (variable) + tag (16)
+            guard let combined = sealedBox.combined else {
+                throw EncryptionError.encryptionFailed("Failed to get combined sealed box data")
+            }
+            
+            // Format: v1:base64(...)
+            return versionPrefix + combined.base64EncodedString()
+            
+        } catch let error as EncryptionError {
+            throw error
+        } catch {
+            throw EncryptionError.encryptionFailed(error.localizedDescription)
+        }
+    }
+    
+    /// Encrypts a string. Returns the original if encryption fails.
+    func encryptIfNeeded(_ value: String?, using key: Data) -> String? {
+        guard let value = value, !value.isEmpty else { return value }
+        
+        // Already encrypted? Return as-is
+        if isEncrypted(value) {
+            return value
+        }
+        
+        do {
+            return try encrypt(value, using: key)
+        } catch {
+            print("⚠️ [EncryptionService] Encryption failed: \(error). Returning original value.")
+            return value
+        }
+    }
+    
+    /// Encrypts an array of strings.
+    func encryptIfNeeded(_ values: [String]?, using key: Data) -> [String]? {
+        guard let values = values else { return nil }
+        
+        return values.compactMap { value in
+            encryptIfNeeded(value, using: key)
+        }
+    }
 }
 
 // MARK: - Errors
@@ -115,6 +174,7 @@ final class EncryptionService {
 enum EncryptionError: Error, LocalizedError {
     case invalidFormat(String)
     case decryptionFailed(Error)
+    case encryptionFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -122,6 +182,8 @@ enum EncryptionError: Error, LocalizedError {
             return "Invalid encrypted format: \(reason)"
         case .decryptionFailed(let underlyingError):
             return "Decryption failed: \(underlyingError.localizedDescription)"
+        case .encryptionFailed(let reason):
+            return "Encryption failed: \(reason)"
         }
     }
 }

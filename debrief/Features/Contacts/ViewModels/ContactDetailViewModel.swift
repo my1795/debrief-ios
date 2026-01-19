@@ -176,12 +176,14 @@ class ContactDetailViewModel: ObservableObject {
                 .whereField("userId", isEqualTo: userId)
                 .whereField("contactId", isEqualTo: contact.id)
             
-            // Apply Date Filter if present
+            // Apply Date Filter if present (convert to milliseconds)
             if let startDate = filters.startDate {
-                baseQuery = baseQuery.whereField("occurredAt", isGreaterThanOrEqualTo: startDate)
+                let startMs = Int64(startDate.timeIntervalSince1970 * 1000)
+                baseQuery = baseQuery.whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
             }
             if let endDate = filters.endDate {
-                baseQuery = baseQuery.whereField("occurredAt", isLessThan: endDate)
+                let endMs = Int64(endDate.timeIntervalSince1970 * 1000)
+                baseQuery = baseQuery.whereField("occurredAt", isLessThan: endMs)
             }
             
             // 1. Count

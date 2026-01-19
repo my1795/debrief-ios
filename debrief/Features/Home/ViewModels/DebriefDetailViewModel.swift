@@ -166,4 +166,66 @@ class DebriefDetailViewModel: ObservableObject {
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
+    
+    // MARK: - Action Item Editing
+    
+    /// Edits an action item at the given index
+    func editActionItem(at index: Int, newText: String) {
+        guard var items = debrief.actionItems, index < items.count else { return }
+        
+        items[index] = newText
+        updateActionItemsInFirebase(items)
+    }
+    
+    /// Deletes an action item at the given index
+    func deleteActionItem(at index: Int) {
+        guard var items = debrief.actionItems, index < items.count else { return }
+        
+        items.remove(at: index)
+        updateActionItemsInFirebase(items)
+    }
+    
+    /// Adds a new action item
+    func addActionItem(_ text: String) {
+        var items = debrief.actionItems ?? []
+        items.append(text)
+        updateActionItemsInFirebase(items)
+    }
+    
+    /// Updates action items locally and in Firebase
+    private func updateActionItemsInFirebase(_ items: [String]) {
+        // Update local state immediately
+        debrief = Debrief(
+            id: debrief.id,
+            userId: debrief.userId,
+            contactId: debrief.contactId,
+            contactName: debrief.contactName,
+            occurredAt: debrief.occurredAt,
+            duration: debrief.duration,
+            status: debrief.status,
+            summary: debrief.summary,
+            transcript: debrief.transcript,
+            actionItems: items,
+            audioUrl: debrief.audioUrl,
+            audioStoragePath: debrief.audioStoragePath,
+            encrypted: debrief.encrypted,
+            phoneNumber: debrief.phoneNumber,
+            email: debrief.email
+        )
+        
+        // Persist to Firebase
+        Task {
+            do {
+                try await firestoreService.updateActionItems(
+                    debriefId: debrief.id,
+                    actionItems: items,
+                    userId: userId
+                )
+                print("✅ [DebriefDetailViewModel] Action items saved to Firebase")
+            } catch {
+                print("❌ [DebriefDetailViewModel] Failed to save action items: \(error)")
+                errorMessage = "Failed to save changes"
+            }
+        }
+    }
 }

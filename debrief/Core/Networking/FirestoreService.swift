@@ -513,4 +513,37 @@ class FirestoreService {
         
         print("✅ [FirestoreService] Updated contactName for \(debriefId) to '\(contactName)'")
     }
+    
+    // MARK: - Action Items Update
+    
+    /// Updates action items for a debrief with encryption.
+    /// - Parameters:
+    ///   - debriefId: The debrief document ID
+    ///   - actionItems: The new action items (plaintext)
+    ///   - userId: The user ID for encryption key lookup
+    func updateActionItems(debriefId: String, actionItems: [String], userId: String) async throws {
+        let encryptionService = EncryptionService.shared
+        
+        // Get encryption key
+        var encryptedItems = actionItems
+        if let key = EncryptionKeyManager.shared.getKey(userId: userId) {
+            // Encrypt each action item
+            encryptedItems = actionItems.compactMap { item in
+                encryptionService.encryptIfNeeded(item, using: key)
+            }
+            print("🔐 [FirestoreService] Encrypted \(encryptedItems.count) action items")
+        } else {
+            print("⚠️ [FirestoreService] No encryption key, saving plaintext")
+        }
+        
+        // Update Firebase
+        try await db.collection("debriefs")
+            .document(debriefId)
+            .updateData([
+                "actionItems": encryptedItems,
+                "encrypted": true
+            ])
+        
+        print("✅ [FirestoreService] Updated action items for \(debriefId)")
+    }
 }

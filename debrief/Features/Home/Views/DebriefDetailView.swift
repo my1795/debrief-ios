@@ -18,6 +18,10 @@ struct DebriefDetailView: View {
     @State private var selectedActionItemIndices: Set<Int> = []
     @State private var showReminderSheet = false
     
+    // Action Item Editing
+    @State private var editingActionItemIndex: Int? = nil
+    @State private var showAddActionItem = false
+    
     init(debrief: Debrief, userId: String) {
         _viewModel = StateObject(wrappedValue: DebriefDetailViewModel(debrief: debrief, userId: userId))
     }
@@ -145,6 +149,14 @@ struct DebriefDetailView: View {
             )
             .modifier(LargeSheetModifier())
         }
+        .sheet(isPresented: $showAddActionItem) {
+            AddActionItemSheet(
+                onSave: { text in
+                    viewModel.addActionItem(text)
+                }
+            )
+            .modifier(MediumSheetModifier())
+        }
     }
     
     // MARK: - Subviews
@@ -238,13 +250,21 @@ struct DebriefDetailView: View {
                 }
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 if let items = viewModel.debrief.actionItems, !items.isEmpty {
                     ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                        SelectableActionItemRow(
+                        SwipeableActionItemRow(
                             item: item,
                             isSelected: selectedActionItemIndices.contains(index),
-                            onTap: {
+                            isEditing: editingActionItemIndex == index,
+                            onCheckboxTap: {
+                                // Cancel any editing first
+                                if editingActionItemIndex != nil {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        editingActionItemIndex = nil
+                                    }
+                                }
+                                
                                 withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                     if selectedActionItemIndices.contains(index) {
                                         selectedActionItemIndices.remove(index)
@@ -252,20 +272,74 @@ struct DebriefDetailView: View {
                                         selectedActionItemIndices.insert(index)
                                     }
                                 }
-                                // Haptic feedback
                                 let generator = UIImpactFeedbackGenerator(style: .light)
                                 generator.impactOccurred()
+                            },
+                            onTextTap: {
+                                // Tap on text to edit
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    editingActionItemIndex = index
+                                }
+                            },
+                            onEdit: { newText in
+                                viewModel.editActionItem(at: index, newText: newText)
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    editingActionItemIndex = nil
+                                }
+                            },
+                            onDelete: {
+                                viewModel.deleteActionItem(at: index)
+                                selectedActionItemIndices.remove(index)
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    editingActionItemIndex = nil
+                                }
+                            },
+                            onCancelEdit: {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    editingActionItemIndex = nil
+                                }
                             }
                         )
                     }
+                    
+                    // Add new action item button (max 5 items)
+                    if items.count < 5 {
+                        Button {
+                            showAddActionItem = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle")
+                                Text("Add Action Item")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(Color(hex: "5EEAD4"))
+                            .padding(.vertical, 6)
+                        }
+                    }
                 } else {
-                    HStack {
-                        Image(systemName: "checklist")
-                            .font(.largeTitle)
-                            .foregroundStyle(.white.opacity(0.2))
-                        Text("No action items found")
-                            .font(.callout)
-                            .foregroundColor(.white.opacity(0.5))
+                    // Empty state with add button
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "checklist")
+                                .font(.largeTitle)
+                                .foregroundStyle(.white.opacity(0.2))
+                            Text("No action items")
+                                .font(.callout)
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        
+                        Button {
+                            showAddActionItem = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle")
+                                Text("Add Action Item")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(Color(hex: "5EEAD4"))
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -582,3 +656,250 @@ struct LargeSheetModifier: ViewModifier {
         }
     }
 }
+
+struct MediumSheetModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Swipeable Action Item Row
+
+struct SwipeableActionItemRow: View {
+    let item: String
+    let isSelected: Bool
+    let isEditing: Bool
+    let onCheckboxTap: () -> Void
+    let onTextTap: () -> Void
+    let onEdit: (String) -> Void
+    let onDelete: () -> Void
+    let onCancelEdit: () -> Void
+    
+    @State private var editText: String = ""
+    @State private var offset: CGFloat = 0
+    @State private var showDeleteButton: Bool = false
+    @FocusState private var isFocused: Bool
+    
+    private let deleteButtonWidth: CGFloat = 70
+    
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Delete button (revealed by swipe)
+            if showDeleteButton {
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        onDelete()
+                        resetSwipe()
+                    }
+                } label: {
+                    VStack {
+                        Image(systemName: "trash.fill")
+                            .font(.title3)
+                        Text("Delete")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: deleteButtonWidth - 8)
+                    .frame(maxHeight: .infinity)
+                    .background(Color.red.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+            
+            // Main content
+            mainContent
+                .offset(x: offset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if !isEditing {
+                                let translation = value.translation.width
+                                if translation < 0 {
+                                    offset = max(translation, -deleteButtonWidth)
+                                } else if showDeleteButton {
+                                    offset = min(0, -deleteButtonWidth + translation)
+                                }
+                            }
+                        }
+                        .onEnded { value in
+                            if !isEditing {
+                                withAnimation(.spring(response: 0.3)) {
+                                    if value.translation.width < -deleteButtonWidth / 2 {
+                                        offset = -deleteButtonWidth
+                                        showDeleteButton = true
+                                    } else {
+                                        resetSwipe()
+                                    }
+                                }
+                            }
+                        }
+                )
+        }
+        .animation(.spring(response: 0.3), value: showDeleteButton)
+    }
+    
+    private var mainContent: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Checkbox (tap to select for reminder)
+            Button(action: {
+                resetSwipe()
+                onCheckboxTap()
+            }) {
+                ZStack {
+                    Circle()
+                        .stroke(Color(hex: "5EEAD4"), lineWidth: 2)
+                        .frame(width: 26, height: 26)
+                    
+                    if isSelected {
+                        Circle()
+                            .fill(Color(hex: "5EEAD4"))
+                            .frame(width: 26, height: 26)
+                        
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color(hex: "134E4A"))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+            
+            // Text content or edit field
+            if isEditing {
+                editingView
+            } else {
+                // Tappable text to edit
+                Text(item)
+                    .foregroundColor(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        resetSwipe()
+                        onTextTap()
+                    }
+                
+                // Edit pencil icon hint
+                Image(systemName: "pencil")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.3))
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isEditing ? Color(hex: "5EEAD4").opacity(0.08) : 
+                      (isSelected ? Color(hex: "5EEAD4").opacity(0.12) : Color.white.opacity(0.04)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isEditing ? Color(hex: "5EEAD4").opacity(0.4) : 
+                        (isSelected ? Color(hex: "5EEAD4").opacity(0.25) : Color.white.opacity(0.06)), lineWidth: 1)
+        )
+    }
+    
+    private var editingView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if #available(iOS 16.0, *) {
+                TextField("", text: $editText, axis: .vertical)
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .focused($isFocused)
+                    .lineLimit(2...5)
+                    .padding(12)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(hex: "5EEAD4").opacity(0.4), lineWidth: 1)
+                    )
+            } else {
+                // iOS 15 fallback: Use TextEditor for multiline editing
+                TextEditor(text: $editText)
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .focused($isFocused)
+                    .frame(minHeight: 60, maxHeight: 120)
+                    .padding(8)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(hex: "5EEAD4").opacity(0.4), lineWidth: 1)
+                    )
+            }
+            
+            HStack(spacing: 10) {
+                // Save button
+                Button {
+                    if !editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onEdit(editText.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.bold))
+                        Text("Save")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .foregroundColor(Color(hex: "134E4A"))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: "5EEAD4"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                
+                // Cancel button
+                Button {
+                    onCancelEdit()
+                } label: {
+                    Text("Cancel")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                
+                Spacer()
+                
+                // Delete button (visible in edit mode)
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.subheadline)
+                        .foregroundColor(Color(hex: "FCA5A5"))
+                        .padding(10)
+                        .background(Color.red.opacity(0.12))
+                        .clipShape(Circle())
+                }
+            }
+        }
+        .onAppear {
+            editText = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isFocused = true
+            }
+        }
+    }
+    
+    private func resetSwipe() {
+        withAnimation(.spring(response: 0.3)) {
+            offset = 0
+            showDeleteButton = false
+        }
+    }
+}
+
