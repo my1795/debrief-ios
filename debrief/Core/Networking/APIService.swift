@@ -294,7 +294,7 @@ class APIService {
             case "PROCESSING": return .processing
             case "READY": return .ready
             case "FAILED": return .failed
-            default: return .draft
+            default: return .created
             }
         }()
         

@@ -8,9 +8,7 @@
 import Foundation
 
 enum DebriefStatus: String, Codable {
-    case draft = "DRAFT"
     case created = "CREATED"
-    case uploaded = "UPLOADED"
     case processing = "PROCESSING"
     case ready = "READY"
     case failed = "FAILED"
@@ -34,13 +32,29 @@ struct Debrief: Identifiable, Codable {
     let phoneNumber: String?
     let email: String?
     
+    // MARK: - Retry Handling (Internal - not shown in UI)
+    let retryCount: Int          // 0-3, how many times backend retried
+    let nextRetryAt: Date?       // When next retry scheduled (nil if permanent failure)
+    let errorMessage: String?    // Backend error message
+    
     // Alias `id` to `debriefId` for easier access when checking raw data consistency
     var debriefId: String { id }
+    
+    /// True if FAILED but will auto-retry (retryCount < 3 && nextRetryAt != nil)
+    var isRetrying: Bool {
+        status == .failed && retryCount < 3 && nextRetryAt != nil
+    }
+    
+    /// True if permanently failed (retryCount >= 3 or nextRetryAt == nil when failed)
+    var isPermanentlyFailed: Bool {
+        status == .failed && !isRetrying
+    }
     
     // MARK: - Coding Keys
     enum CodingKeys: String, CodingKey {
         case id = "debriefId"
         case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath, encrypted, encryptionVersion, phoneNumber, email
+        case retryCount, nextRetryAt, errorMessage
         case audioDurationSec // Legacy/Alternate key from backend
     }
     
@@ -68,6 +82,19 @@ struct Debrief: Identifiable, Codable {
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         
+        // Retry fields
+        retryCount = try container.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
+        errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+        
+        // nextRetryAt: decode from epoch milliseconds
+        if let nextRetryMs = try? container.decode(Int64.self, forKey: .nextRetryAt) {
+            nextRetryAt = Date(timeIntervalSince1970: TimeInterval(nextRetryMs) / 1000.0)
+        } else if let nextRetryMs = try? container.decode(Double.self, forKey: .nextRetryAt) {
+            nextRetryAt = Date(timeIntervalSince1970: nextRetryMs / 1000.0)
+        } else {
+            nextRetryAt = nil
+        }
+        
         // Complex Decoding Helpers
         occurredAt = try Debrief.decodeDate(from: container)
         duration = max(0, Debrief.decodeDuration(from: container))
@@ -94,10 +121,15 @@ struct Debrief: Identifiable, Codable {
         try container.encodeIfPresent(encryptionVersion, forKey: .encryptionVersion)
         try container.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
         try container.encodeIfPresent(email, forKey: .email)
+        
+        // Retry fields
+        try container.encode(retryCount, forKey: .retryCount)
+        try container.encodeIfPresent(nextRetryAt, forKey: .nextRetryAt)
+        try container.encodeIfPresent(errorMessage, forKey: .errorMessage)
     }
     
     // MARK: - Manual Initializer
-    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, encryptionVersion: String? = nil, phoneNumber: String? = nil, email: String? = nil) {
+    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, encryptionVersion: String? = nil, phoneNumber: String? = nil, email: String? = nil, retryCount: Int = 0, nextRetryAt: Date? = nil, errorMessage: String? = nil) {
         self.id = id
         self.userId = userId
         self.contactId = contactId
@@ -114,6 +146,9 @@ struct Debrief: Identifiable, Codable {
         self.encrypted = encryptionVersion == "v1" || encrypted // Backward compatibility
         self.phoneNumber = phoneNumber
         self.email = email
+        self.retryCount = retryCount
+        self.nextRetryAt = nextRetryAt
+        self.errorMessage = errorMessage
     }
 }
 

@@ -56,7 +56,7 @@ class DebriefUploadManager: ObservableObject {
             contactName: contact.name,
             occurredAt: Date(),
             duration: duration,
-            status: .uploaded, // "Uploading..." style in UI
+            status: .created, // Audio uploaded, waiting for processing
             summary: nil,
             transcript: nil,
             actionItems: nil,

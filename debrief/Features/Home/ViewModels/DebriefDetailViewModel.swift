@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseFirestore
 
 @MainActor
 class DebriefDetailViewModel: ObservableObject {
@@ -25,6 +26,9 @@ class DebriefDetailViewModel: ObservableObject {
     private let audioService: AudioPlaybackService
     private var cancellables = Set<AnyCancellable>()
     private let userId: String
+    
+    // Real-time listener for status updates
+    private var debriefListener: ListenerRegistration?
     
     init(debrief: Debrief, userId: String, apiService: APIService = .shared, firestoreService: FirestoreService = .shared, storageService: StorageService = .shared) {
         self.debrief = debrief
@@ -66,6 +70,14 @@ class DebriefDetailViewModel: ObservableObject {
             
         // Load full details immediately
         loadDebriefDetails()
+        
+        // Start real-time listener if still processing
+        startListeningIfProcessing()
+    }
+    
+    deinit {
+        debriefListener?.remove()
+        debriefListener = nil
     }
     
     func loadDebriefDetails() {
@@ -149,6 +161,61 @@ class DebriefDetailViewModel: ObservableObject {
                 self.errorMessage = "Failed to load full details"
             }
             isLoadingDetails = false
+        }
+    }
+    
+    // MARK: - Real-Time Status Listener
+    
+    /// Starts a real-time listener if debrief is still processing.
+    /// Automatically updates UI when status changes to READY.
+    private func startListeningIfProcessing() {
+        // Only start listener if status is not final
+        guard debrief.status == .processing || debrief.status == .created || debrief.isRetrying else {
+            print("📡 [DebriefDetailViewModel] Status is \(debrief.status), no listener needed")
+            return
+        }
+        
+        print("📡 [DebriefDetailViewModel] Starting real-time listener for status updates...")
+        
+        debriefListener = firestoreService.listenToDebrief(debriefId: debrief.id) { [weak self] result in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                switch result {
+                case .success(let updatedDebrief):
+                    print("📡 [DebriefDetailViewModel] Received update: status=\(updatedDebrief.status)")
+                    
+                    // Update local state with new data
+                    self.debrief = Debrief(
+                        id: updatedDebrief.id,
+                        userId: updatedDebrief.userId,
+                        contactId: updatedDebrief.contactId,
+                        contactName: self.debrief.contactName, // Preserve local contact name
+                        occurredAt: updatedDebrief.occurredAt,
+                        duration: updatedDebrief.duration,
+                        status: updatedDebrief.status,
+                        summary: updatedDebrief.summary,
+                        transcript: updatedDebrief.transcript,
+                        actionItems: updatedDebrief.actionItems,
+                        audioUrl: updatedDebrief.audioUrl ?? self.debrief.audioUrl,
+                        audioStoragePath: updatedDebrief.audioStoragePath,
+                        encrypted: updatedDebrief.encrypted,
+                        encryptionVersion: updatedDebrief.encryptionVersion,
+                        phoneNumber: updatedDebrief.phoneNumber,
+                        email: updatedDebrief.email
+                    )
+                    
+                    // Stop listening once status is final
+                    if updatedDebrief.status == .ready || updatedDebrief.status == .failed {
+                        print("✅ [DebriefDetailViewModel] Final status reached, removing listener")
+                        self.debriefListener?.remove()
+                        self.debriefListener = nil
+                    }
+                    
+                case .failure(let error):
+                    print("❌ [DebriefDetailViewModel] Listener error: \(error)")
+                }
+            }
         }
     }
     

@@ -13,9 +13,7 @@ struct StatusBadge: View {
     
     var config: StatusConfig {
         switch status {
-        case .draft:
-            return StatusConfig(label: "Draft", bgColor: .gray.opacity(0.1), fgColor: .gray, borderColor: .gray.opacity(0.3), icon: "clock")
-        case .uploaded, .created:
+        case .created:
             return StatusConfig(label: "Uploading", bgColor: .blue.opacity(0.1), fgColor: .blue, borderColor: .blue.opacity(0.3), icon: "arrow.up.circle")
         case .processing:
             return StatusConfig(label: "Processing", bgColor: .yellow.opacity(0.1), fgColor: .yellow, borderColor: .yellow.opacity(0.3), icon: "arrow.triangle.2.circlepath")
