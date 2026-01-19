@@ -54,7 +54,7 @@ struct ContactDetailView: View {
                             )
                             DetailStatCard(
                                 title: "Duration",
-                                value: "\(viewModel.totalDurationMinutes)m",
+                                value: formatDuration(viewModel.totalDuration),
                                 icon: "clock",
                                 color: .teal,
                                 infoText: "Total duration of recorded debriefs for the selected period."
@@ -172,6 +172,13 @@ struct ContactDetailView: View {
                     await viewModel.loadData(refresh: true)
                 }
             }
+        }
+    }
+    func formatDuration(_ duration: TimeInterval) -> String {
+        if duration < 60 {
+            return "\(Int(duration))s"
+        } else {
+            return "\(Int(duration / 60))m"
         }
     }
 }

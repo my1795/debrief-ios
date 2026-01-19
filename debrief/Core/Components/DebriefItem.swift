@@ -20,7 +20,11 @@ struct DebriefItem: View {
                             .font(.caption2)
                         Text(debrief.occurredAt.formatted(date: .omitted, time: .shortened))
                         Text("•")
-                        Text("\(Int(debrief.duration / 60)) min")
+                        if debrief.duration < 60 {
+                            Text("\(Int(debrief.duration))s")
+                        } else {
+                            Text("\(Int(debrief.duration / 60)) min")
+                        }
                     }
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.6))

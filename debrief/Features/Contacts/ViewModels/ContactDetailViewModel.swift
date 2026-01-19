@@ -11,7 +11,7 @@ class ContactDetailViewModel: ObservableObject {
     
     // Stats
     @Published var totalDebriefsCount: Int = 0
-    @Published var totalDurationMinutes: Int = 0
+    @Published var totalDuration: TimeInterval = 0
     @Published var lastMetString: String = "-"
     @Published var error: AppError? = nil  // User-facing errors
     
@@ -50,6 +50,7 @@ class ContactDetailViewModel: ObservableObject {
     init(contact: Contact) {
         self.contact = contact
         self.filters = DebriefFilters(contactId: contact.id)
+        self.filters.dateOption = .thisWeek // Default to weekly stats as requested
         
         // Debounce Search & Filter changes
         Publishers.CombineLatest($searchText, $filters)
@@ -219,9 +220,9 @@ class ContactDetailViewModel: ObservableObject {
                     return sum + dur
                 }
                 
-                self.totalDurationMinutes = Int(totalDur / 60)
+                self.totalDuration = totalDur
             } else {
-                self.totalDurationMinutes = 0
+                self.totalDuration = 0
             }
             
         } catch {
