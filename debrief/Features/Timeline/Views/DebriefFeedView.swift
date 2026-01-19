@@ -32,8 +32,14 @@ struct DebriefFeedView: View {
                             
                             // Daily Stats Pill
                             GroupedStatsPillView(
-                                leftItems: [("📝", "\(viewModel.dailyStats.todayDebriefs)"), ("📞", "\(viewModel.dailyStats.todayCalls)")],
-                                rightItems: [("⏱️", "\(viewModel.dailyStats.todayMins)", "min")]
+                                leftItems: [("mic.fill", "\(viewModel.dailyStats.todayDebriefs)"), ("phone.fill", "\(viewModel.dailyStats.todayCalls)")],
+                                rightItems: [("clock", formatDuration(viewModel.dailyStats.todayDuration), nil)],
+                                infoTitle: "Daily Stats (Today)",
+                                infoDetails: [
+                                    ("mic.fill", "Total debriefs recorded"),
+                                    ("phone.fill", "Total calls logged"),
+                                    ("clock", "Total duration of interactions")
+                                ]
                             )
                         }
                         .padding(.horizontal)
@@ -140,6 +146,14 @@ struct DebriefFeedView: View {
             .errorBanner(error: $viewModel.error, onRetry: {
                 Task { await viewModel.loadData(userId: userId, refresh: true) }
             })
+        }
+    }
+    
+    func formatDuration(_ duration: TimeInterval) -> String {
+        if duration < 60 {
+            return "\(Int(duration))s"
+        } else {
+            return "\(Int(duration / 60)) min"
         }
     }
 }

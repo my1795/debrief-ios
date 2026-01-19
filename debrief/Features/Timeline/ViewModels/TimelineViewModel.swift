@@ -62,7 +62,7 @@ class TimelineViewModel: ObservableObject {
     struct DailyStats {
         var todayDebriefs: Int = 0
         var todayCalls: Int = 0
-        var todayMins: Int = 0
+        var todayDuration: TimeInterval = 0
     }
     @Published var dailyStats = DailyStats()
     
@@ -73,12 +73,11 @@ class TimelineViewModel: ObservableObject {
     func loadDailyStats(userId: String) async {
         do {
             let stats = try await firestoreService.getDailyStats(userId: userId, date: Date())
-            let durationMins = Int(ceil(Double(stats.totalDurationSec) / 60))
             
             self.dailyStats = DailyStats(
                 todayDebriefs: stats.debriefsCount,
                 todayCalls: stats.callsCount,
-                todayMins: durationMins
+                todayDuration: TimeInterval(stats.totalDurationSec)
             )
         } catch {
             print("❌ [TimelineViewModel] Failed to load daily stats: \(error)")

@@ -50,7 +50,6 @@ struct AppConfig {
         case .stage:
             return "https://debrief-service-306744525686.us-central1.run.app/v1"
         case .production:
-            // TODO: Update with production URL when deployed
             return "https://api.debrief.app/v1"
         }
     }
