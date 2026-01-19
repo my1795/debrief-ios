@@ -778,6 +778,7 @@ struct SwipeableActionItemRow: View {
                 // Tappable text to edit
                 Text(item)
                     .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(4) // Prevent excessive growth
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)

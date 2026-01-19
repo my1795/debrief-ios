@@ -30,6 +30,7 @@ struct Debrief: Identifiable, Codable {
     let audioUrl: String?
     let audioStoragePath: String?
     let encrypted: Bool
+    let encryptionVersion: String? // "v1" or null
     let phoneNumber: String?
     let email: String?
     
@@ -39,7 +40,7 @@ struct Debrief: Identifiable, Codable {
     // MARK: - Coding Keys
     enum CodingKeys: String, CodingKey {
         case id = "debriefId"
-        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath, encrypted, phoneNumber, email
+        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath, encrypted, encryptionVersion, phoneNumber, email
         case audioDurationSec // Legacy/Alternate key from backend
     }
     
@@ -60,7 +61,10 @@ struct Debrief: Identifiable, Codable {
         actionItems = try container.decodeIfPresent([String].self, forKey: .actionItems)
         audioUrl = try container.decodeIfPresent(String.self, forKey: .audioUrl)
         audioStoragePath = try container.decodeIfPresent(String.self, forKey: .audioStoragePath)
-        encrypted = try container.decodeIfPresent(Bool.self, forKey: .encrypted) ?? false
+        encryptionVersion = try container.decodeIfPresent(String.self, forKey: .encryptionVersion)
+        // Auto-set encrypted flag based on version if present, else fallback to explicit flag
+        let explicitEncrypted = try container.decodeIfPresent(Bool.self, forKey: .encrypted) ?? false
+        encrypted = (encryptionVersion == "v1") || explicitEncrypted
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         
@@ -87,12 +91,13 @@ struct Debrief: Identifiable, Codable {
         try container.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try container.encodeIfPresent(audioStoragePath, forKey: .audioStoragePath)
         try container.encode(encrypted, forKey: .encrypted)
+        try container.encodeIfPresent(encryptionVersion, forKey: .encryptionVersion)
         try container.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
         try container.encodeIfPresent(email, forKey: .email)
     }
     
     // MARK: - Manual Initializer
-    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, phoneNumber: String? = nil, email: String? = nil) {
+    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, encryptionVersion: String? = nil, phoneNumber: String? = nil, email: String? = nil) {
         self.id = id
         self.userId = userId
         self.contactId = contactId
@@ -105,7 +110,8 @@ struct Debrief: Identifiable, Codable {
         self.actionItems = actionItems
         self.audioUrl = audioUrl
         self.audioStoragePath = audioStoragePath
-        self.encrypted = encrypted
+        self.encryptionVersion = encryptionVersion
+        self.encrypted = encryptionVersion == "v1" || encrypted // Backward compatibility
         self.phoneNumber = phoneNumber
         self.email = email
     }

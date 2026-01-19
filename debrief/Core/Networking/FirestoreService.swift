@@ -498,17 +498,16 @@ class FirestoreService {
     
     // MARK: - Encryption Support
     
+    // MARK: - Encryption Support
+    
     /// Decrypts encrypted fields in a Debrief if encryption key is available.
-    /// Returns the original debrief unchanged if not encrypted or key is missing.
-    /// Detection: Uses v1: prefix on fields OR encrypted flag.
+    /// Strict V1: Only decrypts if encryptionVersion == "v1" or encrypted == true.
+    /// Does NOT sniff text content.
     func decryptIfNeeded(_ debrief: Debrief, userId: String) -> Debrief {
-        let encryptionService = EncryptionService.shared
-        
-        // Check if any field needs decryption (has v1: prefix or encrypted flag is set)
-        let needsDecryption = debrief.encrypted ||
-            encryptionService.isEncrypted(debrief.summary) ||
-            encryptionService.isEncrypted(debrief.transcript) ||
-            (debrief.actionItems?.contains { encryptionService.isEncrypted($0) } ?? false)
+        // Check strict encryption flag/version
+        // If data is old/legacy without version but encrypted=true, we try V1 decrypt (Base64)
+        // because strict V1 EncryptionService expects valid Base64.
+        let needsDecryption = debrief.encryptionVersion == "v1" || debrief.encrypted
         
         guard needsDecryption else {
             return debrief
@@ -520,10 +519,18 @@ class FirestoreService {
             return debrief
         }
         
+        let encryptionService = EncryptionService.shared
+        
+        // Helper to decrypt safely
+        func decrypt(_ text: String?) -> String? {
+            guard let text = text, !text.isEmpty else { return nil }
+            return (try? encryptionService.decrypt(text, using: key)) ?? text
+        }
+        
         // Decrypt fields
-        let decryptedSummary = encryptionService.decryptIfNeeded(debrief.summary, using: key)
-        let decryptedTranscript = encryptionService.decryptIfNeeded(debrief.transcript, using: key)
-        let decryptedActionItems = encryptionService.decryptIfNeeded(debrief.actionItems, using: key)
+        let decryptedSummary = decrypt(debrief.summary)
+        let decryptedTranscript = decrypt(debrief.transcript)
+        let decryptedActionItems = debrief.actionItems?.map { decrypt($0) ?? $0 }
         
         // Return new Debrief with decrypted values
         return Debrief(
@@ -540,6 +547,7 @@ class FirestoreService {
             audioUrl: debrief.audioUrl,
             audioStoragePath: debrief.audioStoragePath,
             encrypted: false, // Mark as decrypted locally
+            encryptionVersion: debrief.encryptionVersion, // Keep version info
             phoneNumber: debrief.phoneNumber,
             email: debrief.email
         )
@@ -573,24 +581,38 @@ class FirestoreService {
         let encryptionService = EncryptionService.shared
         
         // Get encryption key
-        var encryptedItems = actionItems
+        var finalItems = actionItems
+        var isEncrypted = false
+        
         if let key = EncryptionKeyManager.shared.getKey(userId: userId) {
-            // Encrypt each action item
-            encryptedItems = actionItems.compactMap { item in
-                encryptionService.encryptIfNeeded(item, using: key)
+            // Encrypt each action item strictly
+            do {
+                finalItems = try actionItems.map { item in
+                    try encryptionService.encrypt(item, using: key)
+                }
+                isEncrypted = true
+                print("🔐 [FirestoreService] Encrypted \(finalItems.count) action items (V1)")
+            } catch {
+                print("❌ [FirestoreService] Failed to encrypt action items: \(error). Aborting update.")
+                throw error
             }
-            print("🔐 [FirestoreService] Encrypted \(encryptedItems.count) action items")
         } else {
             print("⚠️ [FirestoreService] No encryption key, saving plaintext")
         }
         
         // Update Firebase
+        var updateData: [String: Any] = [
+            "actionItems": finalItems,
+            "encrypted": isEncrypted
+        ]
+        
+        if isEncrypted {
+            updateData["encryptionVersion"] = "v1"
+        }
+        
         try await db.collection("debriefs")
             .document(debriefId)
-            .updateData([
-                "actionItems": encryptedItems,
-                "encrypted": true
-            ])
+            .updateData(updateData)
         
         print("✅ [FirestoreService] Updated action items for \(debriefId)")
     }

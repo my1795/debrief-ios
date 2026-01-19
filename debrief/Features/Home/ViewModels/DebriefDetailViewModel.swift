@@ -55,6 +55,15 @@ class DebriefDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
+        audioService.$decryptionError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                if let error = error {
+                    self?.errorMessage = "Playback failed: \(error.localizedDescription)"
+                }
+            }
+            .store(in: &cancellables)
+            
         // Load full details immediately
         loadDebriefDetails()
     }
@@ -79,6 +88,40 @@ class DebriefDetailViewModel: ObservableObject {
                     }
                 }
                 
+                // Decrypt text fields if needed
+                var finalTexts = (
+                    summary: fullDebrief.summary,
+                    transcript: fullDebrief.transcript,
+                    actionItems: fullDebrief.actionItems
+                )
+                
+                // Strict V1 check: valid version exists
+                if fullDebrief.encryptionVersion != nil {
+                    if let key = EncryptionKeyManager.shared.getKey(userId: userId) {
+                        print("🔐 [DebriefDetailViewModel] Decrypting text fields (Strict V1)...")
+                        
+                        func decrypt(_ text: String?) -> String? {
+                            guard let text = text, !text.isEmpty else { return nil }
+                            // Directly decrypt base64 string, no checks
+                            do {
+                                return try EncryptionService.shared.decrypt(text, using: key)
+                            } catch {
+                                print("⚠️ [DebriefDetailViewModel] Decrypt failed: \(error)")
+                                return text
+                            }
+                        }
+                        
+                        finalTexts.summary = decrypt(fullDebrief.summary)
+                        finalTexts.transcript = decrypt(fullDebrief.transcript)
+                        if let items = fullDebrief.actionItems {
+                            finalTexts.actionItems = items.map { decrypt($0) ?? $0 }
+                        }
+                    } else {
+                        print("⚠️ [DebriefDetailViewModel] Encrypted data but no key")
+                        errorMessage = "Decryption key missing"
+                    }
+                }
+                
                 // Preserve locally known contact name
                 let updatedDebrief = Debrief(
                     id: fullDebrief.id,
@@ -88,11 +131,13 @@ class DebriefDetailViewModel: ObservableObject {
                     occurredAt: fullDebrief.occurredAt,
                     duration: fullDebrief.duration,
                     status: fullDebrief.status,
-                    summary: fullDebrief.summary,
-                    transcript: fullDebrief.transcript,
-                    actionItems: fullDebrief.actionItems,
+                    summary: finalTexts.summary,
+                    transcript: finalTexts.transcript,
+                    actionItems: finalTexts.actionItems,
                     audioUrl: resolvedAudioUrl,
-                    audioStoragePath: fullDebrief.audioStoragePath
+                    audioStoragePath: fullDebrief.audioStoragePath,
+                    encrypted: fullDebrief.encrypted, // Keep server flag
+                    encryptionVersion: fullDebrief.encryptionVersion
                 )
                 
                 self.debrief = updatedDebrief
@@ -142,7 +187,24 @@ class DebriefDetailViewModel: ObservableObject {
             return
         }
         
-        audioService.toggle(url: url)
+        Task {
+            // Check if we should treat this as encrypted
+            // Now strictly relying on model state (which checks encryptionVersion)
+            // If the user refreshed, we should have the correct version.
+            let isEncrypted = debrief.encrypted
+            
+            if isEncrypted {
+                guard let key = EncryptionKeyManager.shared.getKey(userId: userId) else {
+                    print("❌ [DebriefDetailViewModel] No encryption key found!")
+                    errorMessage = "Decryption key missing"
+                    return
+                }
+                
+                await audioService.toggleEncrypted(remoteURL: url, key: key)
+            } else {
+                audioService.toggle(url: url)
+            }
+        }
     }
     
     var shareableText: String {

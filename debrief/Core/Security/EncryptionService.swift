@@ -9,13 +9,14 @@ import Foundation
 import CryptoKit
 
 /// Handles AES-256-GCM decryption of encrypted debrief fields.
-/// Encrypted format: v1:base64(nonce + ciphertext + tag)
+/// Encrypted format:
+/// - Text: base64(nonce + ciphertext + tag)
+/// - Audio: nonce + ciphertext + tag (raw binary)
 final class EncryptionService {
     static let shared = EncryptionService()
     
-    // MARK: - Constants (from API spec)
+    // MARK: - Constants
     
-    private let versionPrefix = "v1:"
     private let nonceSize = 12    // bytes
     private let tagSize = 16      // bytes (128 bits / 8)
     
@@ -23,99 +24,27 @@ final class EncryptionService {
     
     // MARK: - Public API
     
-    /// Checks if a string value is encrypted (starts with v1: prefix).
-    func isEncrypted(_ value: String?) -> Bool {
-        guard let value = value else { return false }
-        return value.hasPrefix(versionPrefix)
-    }
-    
-    /// Decrypts an encrypted string using the provided key.
-    /// - Parameters:
-    ///   - ciphertext: The encrypted string in format "v1:base64(...)"
-    ///   - key: The 32-byte AES key
-    /// - Returns: The decrypted plaintext string
-    func decrypt(_ ciphertext: String, using key: Data) throws -> String {
-        // 1. Validate and strip prefix
-        guard ciphertext.hasPrefix(versionPrefix) else {
-            throw EncryptionError.invalidFormat("Missing v1: prefix")
-        }
-        
-        let base64String = String(ciphertext.dropFirst(versionPrefix.count))
-        
-        // 2. Base64 decode
+    /// Decrypts a base64 encoded encrypted string using the provided key.
+    /// Format: base64(nonce + ciphertext + tag)
+    func decrypt(_ base64String: String, using key: Data) throws -> String {
+        // 1. Base64 decode
         guard let combinedData = Data(base64Encoded: base64String) else {
             throw EncryptionError.invalidFormat("Invalid base64 encoding")
         }
         
-        // 3. Validate minimum length (nonce + tag)
-        let minLength = nonceSize + tagSize
-        guard combinedData.count >= minLength else {
-            throw EncryptionError.invalidFormat("Data too short: \(combinedData.count) bytes")
+        // 2. Decrypt binary data
+        let decryptedData = try decryptData(combinedData, using: key)
+        
+        // 3. Convert to UTF-8
+        guard let plaintext = String(data: decryptedData, encoding: .utf8) else {
+            throw EncryptionError.invalidFormat("Decrypted data is not valid UTF-8")
         }
         
-        // 4. Extract components: nonce (12) + ciphertext (variable) + tag (16)
-        let nonce = combinedData.prefix(nonceSize)
-        let ciphertextAndTag = combinedData.suffix(from: nonceSize)
-        
-        // 5. Create AES-GCM key
-        let symmetricKey = SymmetricKey(data: key)
-        
-        // 6. Create sealed box and decrypt
-        do {
-            let sealedBox = try AES.GCM.SealedBox(
-                nonce: AES.GCM.Nonce(data: nonce),
-                ciphertext: ciphertextAndTag.dropLast(tagSize),
-                tag: ciphertextAndTag.suffix(tagSize)
-            )
-            
-            let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
-            
-            guard let plaintext = String(data: decryptedData, encoding: .utf8) else {
-                throw EncryptionError.invalidFormat("Decrypted data is not valid UTF-8")
-            }
-            
-            return plaintext
-            
-        } catch let error as EncryptionError {
-            throw error
-        } catch {
-            throw EncryptionError.decryptionFailed(error)
-        }
+        return plaintext
     }
-    
-    /// Decrypts a string if it's encrypted, otherwise returns the original value.
-    /// Returns nil if the input is nil.
-    func decryptIfNeeded(_ value: String?, using key: Data) -> String? {
-        guard let value = value else { return nil }
-        
-        guard isEncrypted(value) else {
-            return value // Not encrypted, return as-is
-        }
-        
-        do {
-            return try decrypt(value, using: key)
-        } catch {
-            print("⚠️ [EncryptionService] Decryption failed: \(error). Returning original value.")
-            return value // Graceful degradation
-        }
-    }
-    
-    /// Decrypts an array of strings if they're encrypted.
-    func decryptIfNeeded(_ values: [String]?, using key: Data) -> [String]? {
-        guard let values = values else { return nil }
-        
-        return values.map { value in
-            decryptIfNeeded(value, using: key) ?? value
-        }
-    }
-    
-    // MARK: - Encryption
     
     /// Encrypts a plaintext string using the provided key.
-    /// - Parameters:
-    ///   - plaintext: The string to encrypt
-    ///   - key: The 32-byte AES key
-    /// - Returns: The encrypted string in format "v1:base64(nonce + ciphertext + tag)"
+    /// Returns: base64(nonce + ciphertext + tag)
     func encrypt(_ plaintext: String, using key: Data) throws -> String {
         guard let data = plaintext.data(using: .utf8) else {
             throw EncryptionError.encryptionFailed("Failed to encode string as UTF-8")
@@ -124,47 +53,69 @@ final class EncryptionService {
         let symmetricKey = SymmetricKey(data: key)
         
         do {
-            // AES-GCM seal generates random nonce automatically
             let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
-            
-            // Combine: nonce (12) + ciphertext (variable) + tag (16)
             guard let combined = sealedBox.combined else {
-                throw EncryptionError.encryptionFailed("Failed to get combined sealed box data")
+                throw EncryptionError.encryptionFailed("Failed to get sealed box data")
             }
-            
-            // Format: v1:base64(...)
-            return versionPrefix + combined.base64EncodedString()
-            
-        } catch let error as EncryptionError {
-            throw error
+            return combined.base64EncodedString()
         } catch {
             throw EncryptionError.encryptionFailed(error.localizedDescription)
         }
     }
     
-    /// Encrypts a string. Returns the original if encryption fails.
-    func encryptIfNeeded(_ value: String?, using key: Data) -> String? {
-        guard let value = value, !value.isEmpty else { return value }
-        
-        // Already encrypted? Return as-is
-        if isEncrypted(value) {
-            return value
-        }
-        
-        do {
-            return try encrypt(value, using: key)
-        } catch {
-            print("⚠️ [EncryptionService] Encryption failed: \(error). Returning original value.")
-            return value
-        }
+    // MARK: - Audio / Binary
+    
+    /// Decrypts audio data (from file/download).
+    /// Format: nonce (12) + ciphertext (N) + tag (16)
+    func decryptAudioData(_ encryptedData: Data, using key: Data) throws -> Data {
+        return try decryptData(encryptedData, using: key)
     }
     
-    /// Encrypts an array of strings.
-    func encryptIfNeeded(_ values: [String]?, using key: Data) -> [String]? {
-        guard let values = values else { return nil }
+    /// Downloads encrypted audio from URL, decrypts it, and saves to a temporary file.
+    func downloadAndDecryptAudio(from url: URL, using key: Data) async throws -> URL {
+        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
         
-        return values.compactMap { value in
-            encryptIfNeeded(value, using: key)
+        if isVerbose {
+             print("🔐 [EncryptionService] Downloading: \(url.lastPathComponent)")
+        }
+        
+        // 1. Download
+        let (encryptedData, _) = try await URLSession.shared.data(from: url)
+        
+        if isVerbose {
+            print("🔐 [EncryptionService] Downloaded \(encryptedData.count) bytes")
+        }
+        
+        // 2. Decrypt
+        let decryptedData = try decryptAudioData(encryptedData, using: key)
+        
+        if isVerbose {
+            print("🔐 [EncryptionService] Decrypted to \(decryptedData.count) bytes")
+        }
+        
+        // 3. Save
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFile = tempDir.appendingPathComponent(UUID().uuidString + ".m4a")
+        try decryptedData.write(to: tempFile)
+        
+        return tempFile
+    }
+    
+    // MARK: - Core Logic
+    
+    /// Shared decryption logic for binary data (nonce + ciphertext + tag)
+    /// Uses CryptoKit's standard combined format: Nonce (12) + Ciphertext + Tag (16)
+    private func decryptData(_ data: Data, using key: Data) throws -> Data {
+        let symmetricKey = SymmetricKey(data: key)
+        
+        do {
+            // Use the combined initializer which handles the standard format automatically
+            // Standard format: [Nonce (12)] [Ciphertext] [Tag (16)]
+            let sealedBox = try AES.GCM.SealedBox(combined: data)
+            
+            return try AES.GCM.open(sealedBox, using: symmetricKey)
+        } catch {
+            throw EncryptionError.decryptionFailed(error)
         }
     }
 }
