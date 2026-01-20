@@ -9,7 +9,8 @@ import SwiftUI
 
 struct StatsOverviewView: View {
     @ObservedObject var viewModel: StatsViewModel
-    
+    @State private var showQuotaInfo = false
+
     var body: some View {
         VStack(spacing: 16) {
             // MARK: - Current Plan Card
@@ -164,12 +165,16 @@ struct StatsOverviewView: View {
                     }
 
                     // Billing week info tooltip
-                    Button(action: {}) {
+                    Button(action: { showQuotaInfo = true }) {
                         Image(systemName: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.5))
                     }
-                    .help("Billing week is a rolling 7-day period from your first debrief. Resets automatically.")
+                    .alert("Billing Week", isPresented: $showQuotaInfo) {
+                        Button("OK", role: .cancel) { }
+                    } message: {
+                        Text("Your billing week is a rolling 7-day period that starts from your first debrief. Quota usage resets automatically at the end of each billing week.")
+                    }
                 }
 
                 if viewModel.isLoadingQuota {
