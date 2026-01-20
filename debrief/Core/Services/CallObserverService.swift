@@ -7,16 +7,20 @@
 
 import CallKit
 import Foundation
+import UIKit
 
 class CallObserverService: NSObject, CXCallObserverDelegate {
     static let shared = CallObserverService()
-    
+
     private let callObserver = CXCallObserver()
     private var observedCalls: Set<UUID> = []
-    
+
     // We track start times loosely to calculate duration
     private var callStartTimes: [UUID: Date] = [:]
-    
+
+    // Background task identifier for extending execution
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+
     override init() {
         super.init()
         callObserver.setDelegate(self, queue: nil)
@@ -46,35 +50,61 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
     
     private func handleCallEnded(_ call: CXCall) {
         print("📞 [CallObserver] Call Ended: \(call.uuid). Connected: \(call.hasConnected)")
-        
+
         // Clean up
         observedCalls.remove(call.uuid)
         let startTime = callStartTimes.removeValue(forKey: call.uuid)
-        
+
         // FILTER: Only log answered/connected calls
         if call.hasConnected {
+            // Request background time to ensure notification is scheduled immediately
+            beginBackgroundTask()
+
             // Calculate Duration
             let duration: TimeInterval
             if let start = startTime {
                 duration = Date().timeIntervalSince(start)
             } else {
                 // If we missed the start (e.g. app launched mid-call), default to 0 or estimates
-                duration = 0 
+                duration = 0
                 print("⚠️ [CallObserver] Missed start time for connected call")
             }
-            
+
             // 1. Save Locally (Offline First)
             CallStorageService.shared.saveCall(timestamp: Date(), duration: duration)
-            
-            // 2. Trigger Notification
+
+            // 2. Trigger Notification (respects user preference)
             NotificationService.shared.scheduleDebriefPrompt()
-            
+
             // 3. Attempt Sync (Fire and Forget)
             Task {
                 try? await StatsService().syncPendingCalls()
+                // End background task after sync attempt
+                self.endBackgroundTask()
             }
         } else {
             print("📞 [CallObserver] Call Ignored (Not connected/Answered)")
         }
+    }
+
+    // MARK: - Background Task Management
+
+    private func beginBackgroundTask() {
+        // End any existing task first
+        endBackgroundTask()
+
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "CallEndedTask") { [weak self] in
+            // Expiration handler - clean up
+            print("⚠️ [CallObserver] Background task expired")
+            self?.endBackgroundTask()
+        }
+        print("📞 [CallObserver] Background task started: \(backgroundTask.rawValue)")
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        print("📞 [CallObserver] Background task ended: \(backgroundTask.rawValue)")
+        backgroundTask = .invalid
     }
 }

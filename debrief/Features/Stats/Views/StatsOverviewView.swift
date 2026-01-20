@@ -125,7 +125,8 @@ struct StatsOverviewView: View {
                             title: "Most Active Day",
                             value: viewModel.overview.mostActiveDay,
                             subtitle: "This Week",
-                            infoText: "The day of the week you recorded the most debriefs."
+                            infoText: "The day of the week you recorded the most debriefs.",
+                            isLoading: viewModel.isLoadingCalculatedStats && viewModel.overview.mostActiveDay == "-"
                         )
                         QuickStatRow(
                             icon: "flame.fill",
@@ -133,7 +134,8 @@ struct StatsOverviewView: View {
                             title: "Longest Streak",
                             value: "\(viewModel.overview.longestStreak) hrs",
                             subtitle: "Consecutive Hours",
-                            infoText: "The longest sequence of consecutive hours where you recorded at least one debrief."
+                            infoText: "The longest sequence of consecutive hours where you recorded at least one debrief.",
+                            isLoading: viewModel.isLoadingCalculatedStats && viewModel.overview.longestStreak == 0
                         )
                     }
                 }
@@ -448,8 +450,9 @@ struct QuickStatRow: View {
     let value: String
     var subtitle: String? = nil
     var infoText: String? = nil
+    var isLoading: Bool = false
     @State private var showInfo = false
-    
+
     var body: some View {
         HStack {
             HStack(spacing: 12) {
@@ -466,7 +469,7 @@ struct QuickStatRow: View {
                         Text(title)
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.8))
-                        
+
                         if let info = infoText {
                             Button(action: { showInfo.toggle() }) {
                                 Image(systemName: "info.circle")
@@ -478,7 +481,7 @@ struct QuickStatRow: View {
                             }
                         }
                     }
-                    
+
                     if let subtitle = subtitle {
                         Text(subtitle)
                             .font(.caption2)
@@ -487,9 +490,15 @@ struct QuickStatRow: View {
                 }
             }
             Spacer()
-            Text(value)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: color))
+                    .scaleEffect(0.8)
+            } else {
+                Text(value)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+            }
         }
     }
 }

@@ -547,25 +547,53 @@ class APIService {
         }
     }
     
-    func deleteAllDebriefs() async throws {
-        // Trigger backend to delete all recordings and recalculate quota
-        guard let url = URL(string: "\(baseURL)/debriefs") else {
+    // MARK: - Free Voice Storage
+
+    struct FreeVoiceStorageResponse: Decodable {
+        let success: Bool?
+        let message: String?
+        // Optional fields - backend may process async and not return these
+        let freedAt: String?
+        let deletedFilesCount: Int?
+        let updatedDebriefsCount: Int?
+        let freedStorageMB: Int?
+    }
+
+    /// Deletes all audio files from storage while preserving transcripts, summaries, and action items
+    /// Backend returns 202 Accepted and processes in background
+    func freeVoiceStorage() async throws -> FreeVoiceStorageResponse {
+        guard let url = URL(string: "\(baseURL)/account/audio") else {
             throw APIError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        
+
         if let user = Auth.auth().currentUser {
             let token = try await user.getIDToken()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
-        let (_, response) = try await URLSession.shared.data(for: request)
-        
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
         guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }
+
+        // Handle empty response (202 Accepted with no body)
+        if data.isEmpty {
+            return FreeVoiceStorageResponse(
+                success: true,
+                message: "Request accepted, processing in background",
+                freedAt: nil,
+                deletedFilesCount: nil,
+                updatedDebriefsCount: nil,
+                freedStorageMB: nil
+            )
+        }
+
+        let decoder = JSONDecoder()
+        return try decoder.decode(FreeVoiceStorageResponse.self, from: data)
     }
     
     // MARK: - Account Management

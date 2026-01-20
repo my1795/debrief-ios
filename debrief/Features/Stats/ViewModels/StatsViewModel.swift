@@ -20,6 +20,19 @@ struct StatsDisplayData: Identifiable {
     let icon: String // SF Symbol
 }
 
+// MARK: - Cached Calculated Stats (6-hour TTL)
+struct CalculatedStatsCache: Codable {
+    let mostActiveDay: String
+    let longestStreak: Int
+    let cachedAt: Date
+    let weekStart: Date
+
+    var isValid: Bool {
+        let sixHours: TimeInterval = 6 * 60 * 60
+        return Date().timeIntervalSince(cachedAt) < sixHours
+    }
+}
+
 @MainActor
 class StatsViewModel: ObservableObject {
     @Published var stats: [StatsDisplayData] = []
@@ -32,10 +45,15 @@ class StatsViewModel: ObservableObject {
     @Published var isLoadingWeeklyStats = false // Widget stats loading
     @Published var isLoadingQuickStats = false // Quick stats loading
     @Published var isLoadingQuota = false // Quota loading
+    @Published var isLoadingCalculatedStats = false // mostActiveDay/streak loading
     @Published var error: AppError? = nil  // User-facing errors
     @Published var weeklyStatsError: Bool = false // Error loading weekly stats
     @Published var quickStatsError: Bool = false // Error loading quick stats
     @Published var quotaError: Bool = false // Error loading quota
+
+    // Calculated stats (from debriefs snapshot with 6h cache)
+    @Published var mostActiveDay: String = "-"
+    @Published var longestStreak: Int = 0
     
     // Recent Activity Chart Data (Keeping mock for now as API doesn't return history yet)
     @Published var recentActivity: [UsageEvent] = [
@@ -50,8 +68,10 @@ class StatsViewModel: ObservableObject {
     
     private let statsService: StatsServiceProtocol
     private var cancellables = Set<AnyCancellable>()
-    
+    private var debriefsListenerCancellable: AnyCancellable?
+
     private var currentUserId: String?
+    private let cacheKey = "calculated_stats_cache"
 
     init(statsService: StatsServiceProtocol = StatsService()) {
         self.statsService = statsService
@@ -59,6 +79,7 @@ class StatsViewModel: ObservableObject {
 
     deinit {
         cancellables.forEach { $0.cancel() }
+        debriefsListenerCancellable?.cancel()
     }
 
     // MARK: - Snapshot Listener Based Loading
@@ -117,6 +138,9 @@ class StatsViewModel: ObservableObject {
 
         // Top contacts still needs debrief fetch (with cache)
         loadTopContactsWithCache(userId: userId)
+
+        // Calculated stats (mostActiveDay, longestStreak) with 6h cache
+        loadCalculatedStatsWithCache(userId: userId)
     }
 
     /// Updates ALL stats from UserPlan data (no debrief fetch needed)
@@ -145,7 +169,7 @@ class StatsViewModel: ObservableObject {
             StatsDisplayData(title: "Active Contacts", value: "\(uniqueContactsCount)", subValue: nil, isPositive: nil, icon: "person.2.fill")
         ]
 
-        // 3. Overview Stats (from weeklyUsage)
+        // 3. Overview Stats (from weeklyUsage + calculated stats)
         let totalMinutes = Int(ceil(Double(totalSeconds) / 60.0))
         let avgSeconds = debriefCount > 0 ? Double(totalSeconds) / Double(debriefCount) : 0.0
 
@@ -155,11 +179,185 @@ class StatsViewModel: ObservableObject {
             totalActionItems: actionItemsCount,
             totalContacts: uniqueContactsCount,
             avgDebriefDuration: avgSeconds,
-            mostActiveDay: "-", // Would need additional tracking in backend
-            longestStreak: 0     // Would need additional tracking in backend
+            mostActiveDay: self.mostActiveDay,  // From calculated stats
+            longestStreak: self.longestStreak   // From calculated stats
         )
 
         print("✅ [StatsViewModel] All stats updated from UserPlan (offline-ready)")
+    }
+
+    // MARK: - Calculated Stats with 6-Hour Cache
+
+    /// Loads mostActiveDay and longestStreak with 6-hour cache
+    private func loadCalculatedStatsWithCache(userId: String) {
+        let weekStart = statsWeekProvider.currentWeekRange().start
+
+        // 1. Try to load from cache first
+        if let cached = loadCachedCalculatedStats(userId: userId, weekStart: weekStart) {
+            self.mostActiveDay = cached.mostActiveDay
+            self.longestStreak = cached.longestStreak
+            print("📦 [StatsViewModel] Using cached calculated stats (mostActiveDay: \(cached.mostActiveDay), streak: \(cached.longestStreak))")
+
+            // If cache is still valid, don't fetch
+            if cached.isValid {
+                return
+            }
+            // Cache expired but we have data - fetch in background, keep showing cached values
+            print("⏰ [StatsViewModel] Cache expired, fetching fresh data in background...")
+        } else {
+            // No cache - show loading state
+            isLoadingCalculatedStats = true
+        }
+
+        // 2. Start snapshot listener for weekly debriefs
+        startWeeklyDebriefsListener(userId: userId, weekStart: weekStart)
+    }
+
+    /// Starts a snapshot listener for current week's debriefs to calculate stats
+    private func startWeeklyDebriefsListener(userId: String, weekStart: Date) {
+        debriefsListenerCancellable?.cancel()
+
+        let (start, end) = statsWeekProvider.currentWeekRange()
+
+        // Create filters for current week using custom date range
+        var filters = DebriefFilters()
+        filters.dateOption = .custom
+        filters.customStartDate = start
+        filters.customEndDate = end
+
+        debriefsListenerCancellable = FirestoreService.shared.observeDebriefs(
+            userId: userId,
+            filters: filters,
+            limit: 200 // Get all debriefs for the week for accurate calculation
+        )
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    print("❌ [StatsViewModel] Weekly debriefs listener failed: \(error)")
+                }
+                self?.isLoadingCalculatedStats = false
+            },
+            receiveValue: { [weak self] result in
+                guard let self = self else { return }
+
+                // Calculate stats from debriefs
+                let calculatedMostActiveDay = self.calculateMostActiveDay(from: result.debriefs)
+                let calculatedStreak = self.calculateHourlyStreak(from: result.debriefs)
+
+                self.mostActiveDay = calculatedMostActiveDay
+                self.longestStreak = calculatedStreak
+                self.isLoadingCalculatedStats = false
+
+                // Update overview with new values
+                self.overview = StatsOverview(
+                    totalDebriefs: self.overview.totalDebriefs,
+                    totalMinutes: self.overview.totalMinutes,
+                    totalActionItems: self.overview.totalActionItems,
+                    totalContacts: self.overview.totalContacts,
+                    avgDebriefDuration: self.overview.avgDebriefDuration,
+                    mostActiveDay: calculatedMostActiveDay,
+                    longestStreak: calculatedStreak
+                )
+
+                // Save to cache
+                self.saveCachedCalculatedStats(
+                    userId: userId,
+                    mostActiveDay: calculatedMostActiveDay,
+                    longestStreak: calculatedStreak,
+                    weekStart: weekStart
+                )
+
+                print("✅ [StatsViewModel] Calculated stats updated - mostActiveDay: \(calculatedMostActiveDay), streak: \(calculatedStreak) (from \(result.debriefs.count) debriefs, cache: \(result.isFromCache))")
+            }
+        )
+    }
+
+    // MARK: - Calculation Helpers
+
+    private func calculateMostActiveDay(from debriefs: [Debrief]) -> String {
+        guard !debriefs.isEmpty else { return "-" }
+
+        var dayCounts: [Int: Int] = [:]
+        for d in debriefs {
+            let weekday = Calendar.current.component(.weekday, from: d.occurredAt)
+            dayCounts[weekday, default: 0] += 1
+        }
+
+        guard let maxDay = dayCounts.max(by: { $0.value < $1.value })?.key else {
+            return "-"
+        }
+
+        return dayName(for: maxDay)
+    }
+
+    private func calculateHourlyStreak(from debriefs: [Debrief]) -> Int {
+        guard !debriefs.isEmpty else { return 0 }
+
+        let hours = debriefs.map { Int($0.occurredAt.timeIntervalSince1970 / 3600) }
+        let uniqueHours = Array(Set(hours)).sorted()
+
+        if uniqueHours.isEmpty { return 0 }
+
+        var maxStreak = 1
+        var currentStreak = 1
+
+        for i in 1..<uniqueHours.count {
+            if uniqueHours[i] == uniqueHours[i-1] + 1 {
+                currentStreak += 1
+            } else {
+                maxStreak = max(maxStreak, currentStreak)
+                currentStreak = 1
+            }
+        }
+        return max(maxStreak, currentStreak)
+    }
+
+    private func dayName(for weekday: Int) -> String {
+        switch weekday {
+        case 1: return "Sunday"
+        case 2: return "Monday"
+        case 3: return "Tuesday"
+        case 4: return "Wednesday"
+        case 5: return "Thursday"
+        case 6: return "Friday"
+        case 7: return "Saturday"
+        default: return "-"
+        }
+    }
+
+    // MARK: - Cache Helpers
+
+    private func loadCachedCalculatedStats(userId: String, weekStart: Date) -> CalculatedStatsCache? {
+        let key = "\(cacheKey)_\(userId)"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(CalculatedStatsCache.self, from: data) else {
+            return nil
+        }
+
+        // Check if cache is for the same week
+        let calendar = Calendar.current
+        guard calendar.isDate(cache.weekStart, inSameDayAs: weekStart) else {
+            print("📦 [StatsViewModel] Cache is for different week, invalidating")
+            return nil
+        }
+
+        return cache
+    }
+
+    private func saveCachedCalculatedStats(userId: String, mostActiveDay: String, longestStreak: Int, weekStart: Date) {
+        let cache = CalculatedStatsCache(
+            mostActiveDay: mostActiveDay,
+            longestStreak: longestStreak,
+            cachedAt: Date(),
+            weekStart: weekStart
+        )
+
+        if let data = try? JSONEncoder().encode(cache) {
+            let key = "\(cacheKey)_\(userId)"
+            UserDefaults.standard.set(data, forKey: key)
+            print("💾 [StatsViewModel] Saved calculated stats to cache")
+        }
     }
 
     /// Legacy method - now starts snapshot listener

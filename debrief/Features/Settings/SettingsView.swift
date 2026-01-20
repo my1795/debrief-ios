@@ -72,11 +72,12 @@ struct SettingsView: View {
                         // Plan Section
                         SettingsSection(title: "Plan") {
                             SettingsRow(icon: "star.circle.fill", title: "Current Plan", value: viewModel.currentPlan)
-                            
-                            // "Usage" link kept as per screenshot
-                            NavigationLink(destination: UsageView(viewModel: viewModel)) {
-                                SettingsRow(icon: "chart.bar.fill", title: "Billing History", value: "Usage", showChevron: true)
-                            }
+
+                            // Billing History - Disabled for beta
+                            // TODO: Re-enable when billing is ready
+                            // NavigationLink(destination: UsageView(viewModel: viewModel)) {
+                            //     SettingsRow(icon: "chart.bar.fill", title: "Billing History", value: "Usage", showChevron: true)
+                            // }
                         }
                         
                         // Preferences Section
@@ -91,9 +92,13 @@ struct SettingsView: View {
                             } label: {
                                 SettingsRow(icon: "hand.raised.fill", title: "Privacy Policy", showChevron: true)
                             }
-                            
-                            SettingsRow(icon: "lock.shield.fill", title: "Data Handling", value: "More Info", showChevron: true)
-                            
+
+                            Button {
+                                viewModel.openDataHandling()
+                            } label: {
+                                SettingsRow(icon: "lock.shield.fill", title: "Data Handling", value: "More Info", showChevron: true)
+                            }
+
                             Button {
                                 viewModel.openHelpCenter()
                             } label: {
@@ -110,30 +115,44 @@ struct SettingsView: View {
                                     Text("Storage Used")
                                         .foregroundStyle(.white)
                                     Spacer()
-                                    Text(viewModel.cacheSize)
-                                        .foregroundStyle(.white.opacity(0.7))
+                                    if viewModel.isClearingVoiceData {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Text("\(viewModel.storageUsedMB) MB")
+                                            .foregroundStyle(.white.opacity(0.7))
+                                    }
                                 }
-                                
+
                                 Button(action: {
                                     viewModel.showClearConfirmation = true
                                 }) {
-                                    Text("Free Voice Space")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundStyle(viewModel.canFreeSpace ? Color(hex: "FECACA") : Color.gray.opacity(0.5))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            viewModel.canFreeSpace ? Color.white.opacity(0.05) : Color.white.opacity(0.02)
-                                        )
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    HStack {
+                                        if viewModel.isClearingVoiceData {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "FECACA")))
+                                                .scaleEffect(0.7)
+                                            Text("Freeing Space...")
+                                        } else {
+                                            Text("Free Voice Space")
+                                        }
+                                    }
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(viewModel.canFreeSpace ? Color(hex: "FECACA") : Color.gray.opacity(0.5))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        viewModel.canFreeSpace ? Color.white.opacity(0.05) : Color.white.opacity(0.02)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
-                                .disabled(!viewModel.canFreeSpace)
+                                .disabled(!viewModel.canFreeSpace || viewModel.isClearingVoiceData)
                                 .alert(isPresented: $viewModel.showClearConfirmation) {
                                     Alert(
                                         title: Text("Free Voice Space?"),
-                                        message: Text("You are using \(viewModel.storageUsedMB) MB of your \(viewModel.storageLimitMB) MB quota. This action will delete voice recordings from both your device and the cloud to free up space.\n\nAre you sure?"),
-                                        primaryButton: .destructive(Text("Delete")) {
+                                        message: Text("This will delete all voice recordings (\(viewModel.storageUsedMB) MB) from your device and cloud.\n\n✅ Your transcripts, summaries, and action items will be preserved."),
+                                        primaryButton: .destructive(Text("Delete Voice Files")) {
                                             viewModel.clearVoiceData()
                                         },
                                         secondaryButton: .cancel()

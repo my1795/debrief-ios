@@ -14,10 +14,15 @@ import FirebaseAuth
 class SettingsViewModel: ObservableObject {
     @Published var cacheSize: String = "Calculating..."
     @Published var appVersion: String = "v1.0.0"
-    
-    // Persist notification preference
-    @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = true
-    
+
+    // Notification preference - controls local notifications (not system push)
+    @Published var notificationsEnabled: Bool = true {
+        didSet {
+            guard oldValue != notificationsEnabled else { return }
+            NotificationService.shared.setNotificationsEnabled(notificationsEnabled)
+        }
+    }
+
     @Published var currentPlan: String = "Loading..."
     @Published var usageCost: String = "$0.00" // Kept for now, effectively placeholder
     @Published var showClearConfirmation = false
@@ -30,6 +35,9 @@ class SettingsViewModel: ObservableObject {
     private let statsService = StatsService() // You might want to remove this if not using stats here anymore
     
     init() {
+        // Load saved notification preference
+        notificationsEnabled = NotificationService.shared.isNotificationsEnabled
+
         calculateCacheSize()
         fetchAppVersion()
         fetchUserQuota()
@@ -97,39 +105,58 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var isClearingVoiceData = false
+    @Published var lastFreedStorageMessage: String?
+
     func clearVoiceData() {
-        // Implement deletion logic.
-        // User said: "actually we are deleting remote ones too". 
-        // We must call a service to delete remote data for this user.
-        
-        // 1. Delete Local
-        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        do {
-            let fileURLs = try FileManager.default.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil)
-            for fileURL in fileURLs {
-                try FileManager.default.removeItem(at: fileURL)
-            }
-        } catch {
-            print("Error clearing local data: \(error)")
-        }
-        
-        // 2. Delete Remote & Trigger Quota Recalculation
+        isClearingVoiceData = true
+
         Task {
             do {
-                try await APIService.shared.deleteAllDebriefs()
-                
-                // 3. Refresh Quota & Local Cache
+                // 1. Call backend to delete audio files (returns 202, processes async)
+                let response = try await APIService.shared.freeVoiceStorage()
+
+                let freedMB = response.freedStorageMB ?? 0
+                let deletedFiles = response.deletedFilesCount ?? 0
+                print("✅ [Settings] Request accepted. Freed \(freedMB) MB, deleted \(deletedFiles) files")
+
+                // 2. Delete local audio files only (not all documents)
+                deleteLocalAudioFiles()
+
+                // 3. Refresh quota (will get updated value once backend finishes)
                 await MainActor.run {
-                    self.fetchUserQuota()
-                    self.calculateCacheSize()
+                    self.lastFreedStorageMessage = response.message ?? "Voice files are being deleted..."
+                    self.isClearingVoiceData = false
+                    // Refresh quota after short delay to get updated value
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.fetchUserQuota()
+                    }
                 }
             } catch {
-                print("Error clearing remote data: \(error)")
-                // Still refresh local size even if remote fails
+                print("❌ [Settings] Error freeing voice storage: \(error)")
                 await MainActor.run {
-                    self.calculateCacheSize()
+                    self.isClearingVoiceData = false
                 }
             }
+        }
+    }
+
+    /// Delete only local audio files (.m4a, .wav) - not all documents
+    private func deleteLocalAudioFiles() {
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+
+        do {
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil)
+            let audioExtensions = ["m4a", "wav", "mp3", "caf", "aac"]
+
+            for fileURL in fileURLs {
+                if audioExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    try FileManager.default.removeItem(at: fileURL)
+                    print("🗑️ [Settings] Deleted local audio: \(fileURL.lastPathComponent)")
+                }
+            }
+        } catch {
+            print("⚠️ [Settings] Error deleting local audio files: \(error)")
         }
     }
     
@@ -166,14 +193,19 @@ class SettingsViewModel: ObservableObject {
     }
     
     func openPrivacyPolicy() {
-        if let url = URL(string: "https://debrief-app.vercel.app/") {
+        if let url = URL(string: "https://debrief-app.vercel.app/privacy") {
             UIApplication.shared.open(url)
         }
     }
-    
+
     func openHelpCenter() {
-        // Fallback to main site or generic support
-        if let url = URL(string: "https://debrief-app.vercel.app/") {
+        if let url = URL(string: "https://debrief-app.vercel.app/help") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    func openDataHandling() {
+        if let url = URL(string: "https://debrief-app.vercel.app/terms") {
             UIApplication.shared.open(url)
         }
     }
