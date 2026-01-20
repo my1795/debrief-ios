@@ -55,17 +55,6 @@ class StatsViewModel: ObservableObject {
     @Published var mostActiveDay: String = "-"
     @Published var longestStreak: Int = 0
     
-    // Recent Activity Chart Data (Keeping mock for now as API doesn't return history yet)
-    @Published var recentActivity: [UsageEvent] = [
-        UsageEvent(id: "1", date: Date().addingTimeInterval(-6*86400), count: 3),
-        UsageEvent(id: "2", date: Date().addingTimeInterval(-5*86400), count: 5),
-        UsageEvent(id: "3", date: Date().addingTimeInterval(-4*86400), count: 2),
-        UsageEvent(id: "4", date: Date().addingTimeInterval(-3*86400), count: 0),
-        UsageEvent(id: "5", date: Date().addingTimeInterval(-2*86400), count: 1),
-        UsageEvent(id: "6", date: Date().addingTimeInterval(-86400), count: 4),
-        UsageEvent(id: "7", date: Date(), count: 2)
-    ]
-    
     private let statsService: StatsServiceProtocol
     private var cancellables = Set<AnyCancellable>()
     private var debriefsListenerCancellable: AnyCancellable?

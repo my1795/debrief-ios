@@ -132,12 +132,6 @@ struct TopContactsCache: Codable {
     let stats: [TopContactStat]
 }
 
-struct UsageEvent: Identifiable {
-    let id: String
-    let date: Date
-    let count: Int
-}
-
 // MARK: - Weekly Stats Aggregation
 
 struct WeeklyStats {
