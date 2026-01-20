@@ -124,6 +124,135 @@ class FirestoreService {
         db.settings = settings
     }
     
+    // MARK: - Debriefs Real-time Observation
+
+    /// Snapshot listener result for debriefs - includes metadata for "load more"
+    struct DebriefSnapshotResult {
+        let debriefs: [Debrief]
+        let hasMore: Bool
+        let isFromCache: Bool
+    }
+
+    /// Observes debriefs collection with real-time updates and local caching.
+    /// Uses Firestore's built-in cache for offline support and instant loading.
+    ///
+    /// - Parameters:
+    ///   - userId: User ID for filtering
+    ///   - filters: Optional filters (contact, date range)
+    ///   - limit: Number of debriefs to fetch (increase for "load more")
+    /// - Returns: Publisher that emits on every data change (cache or server)
+    func observeDebriefs(
+        userId: String,
+        filters: DebriefFilters? = nil,
+        limit: Int = 50
+    ) -> AnyPublisher<DebriefSnapshotResult, Error> {
+        let subject = PassthroughSubject<DebriefSnapshotResult, Error>()
+
+        var query: Query = db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+
+        // Apply Contact Filter
+        if let contactId = filters?.contactId, !contactId.isEmpty {
+            query = query.whereField("contactId", isEqualTo: contactId)
+        }
+
+        // Apply Date Range Filter (Start)
+        if let startDate = filters?.startDate {
+            let startMs = Int64(startDate.timeIntervalSince1970 * 1000)
+            query = query.whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+        }
+
+        // Apply Date Range Filter (End)
+        if let endDate = filters?.endDate {
+            let endMs = Int64(endDate.timeIntervalSince1970 * 1000)
+            query = query.whereField("occurredAt", isLessThan: endMs)
+        }
+
+        query = query
+            .order(by: "occurredAt", descending: true)
+            .limit(to: limit)
+
+        let listener = query.addSnapshotListener { [weak self] snapshot, error in
+            if let error = error {
+                print("❌ [FirestoreService] Debriefs listener error: \(error)")
+                subject.send(completion: .failure(error))
+                return
+            }
+
+            guard let snapshot = snapshot else { return }
+
+            let isFromCache = snapshot.metadata.isFromCache
+            print("📡 [FirestoreService] Debriefs update - \(snapshot.documents.count) docs (cache: \(isFromCache))")
+
+            let debriefs = snapshot.documents.compactMap { doc -> Debrief? in
+                try? doc.data(as: Debrief.self)
+            }
+
+            // Decrypt if needed
+            let decryptedDebriefs = self?.decryptIfNeeded(debriefs, userId: userId) ?? debriefs
+
+            // hasMore = we got exactly the limit (might be more)
+            let hasMore = snapshot.documents.count == limit
+
+            subject.send(DebriefSnapshotResult(
+                debriefs: decryptedDebriefs,
+                hasMore: hasMore,
+                isFromCache: isFromCache
+            ))
+        }
+
+        return subject
+            .handleEvents(receiveCancel: {
+                print("🛑 [FirestoreService] Debriefs listener removed")
+                listener.remove()
+            })
+            .eraseToAnyPublisher()
+    }
+
+    /// Observes daily stats with real-time updates
+    func observeDailyStats(userId: String, date: Date) -> AnyPublisher<DailyStatsResult, Error> {
+        let subject = PassthroughSubject<DailyStatsResult, Error>()
+
+        let (startOfDay, endOfDay) = DateCalculator.dayBounds(for: date)
+        let startMs = DateCalculator.toMilliseconds(startOfDay)
+        let endMs = DateCalculator.toMilliseconds(endOfDay)
+
+        let listener = db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    subject.send(completion: .failure(error))
+                    return
+                }
+
+                guard let docs = snapshot?.documents else { return }
+
+                // Calculate duration from debriefs
+                let totalDuration = docs.reduce(0) { sum, doc in
+                    let data = doc.data()
+                    if let d = data["audioDurationSec"] as? Double { return sum + Int(d) }
+                    if let d = data["audioDurationSec"] as? Int { return sum + d }
+                    return sum
+                }
+
+                // Note: Calls count still needs separate query (different collection)
+                // For simplicity, we'll fetch it once and not observe
+                subject.send(DailyStatsResult(
+                    debriefsCount: docs.count,
+                    callsCount: 0, // Will be fetched separately
+                    totalDurationSec: totalDuration
+                ))
+            }
+
+        return subject
+            .handleEvents(receiveCancel: {
+                listener.remove()
+            })
+            .eraseToAnyPublisher()
+    }
+
     // MARK: - Quota Observation (Real-time)
 
     /// Observes user_plans collection for real-time billing updates (NEW v2 system)
@@ -186,7 +315,7 @@ class FirestoreService {
                 tier: "FREE",
                 billingWeekStart: now,
                 billingWeekEnd: weekEnd,
-                weeklyUsage: UserPlanWeeklyUsage(debriefCount: 0, totalSeconds: 0),
+                weeklyUsage: UserPlanWeeklyUsage(debriefCount: 0, totalSeconds: 0, actionItemsCount: 0, uniqueContactIds: []),
                 usedStorageMB: 0,
                 subscriptionEnd: nil,
                 createdAt: now,
@@ -452,6 +581,42 @@ class FirestoreService {
         return uniqueContacts.count
     }
     
+    // MARK: - Aggregation-Only Stats (No Document Fetch)
+
+    /// Lightweight stats struct for aggregation-only queries
+    struct WeeklyStatsAggregation {
+        let count: Int
+        let duration: Int
+    }
+
+    /// Fetches weekly stats using ONLY Firestore aggregation (no document download)
+    /// Use this for previous week trends where actionItems/contacts aren't needed
+    func getWeeklyStatsAggregationOnly(userId: String, start: Date, end: Date) async throws -> WeeklyStatsAggregation {
+        let startMs = Int64(start.timeIntervalSince1970 * 1000)
+        let endMs = Int64(end.timeIntervalSince1970 * 1000)
+
+        let baseQuery = db.collection("debriefs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
+            .whereField("occurredAt", isLessThan: endMs)
+
+        // Run ONLY aggregation queries - no document download
+        async let countTask = baseQuery.count.getAggregation(source: .server)
+        async let sumTask = baseQuery.aggregate([AggregateField.sum("audioDurationSec")]).getAggregation(source: .server)
+
+        let (countSnapshot, sumSnapshot) = try await (countTask, sumTask)
+
+        let count = Int(countSnapshot.count)
+        let totalDuration: Int
+        if let sumValue = sumSnapshot.get(AggregateField.sum("audioDurationSec")) as? NSNumber {
+            totalDuration = sumValue.intValue
+        } else {
+            totalDuration = 0
+        }
+
+        return WeeklyStatsAggregation(count: count, duration: totalDuration)
+    }
+
     // MARK: - Consolidated Weekly Stats
 
     /// Fetches weekly stats using Firestore aggregation for optimal performance

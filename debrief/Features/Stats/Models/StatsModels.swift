@@ -231,6 +231,18 @@ struct UserPlan: Codable {
 struct UserPlanWeeklyUsage: Codable {
     let debriefCount: Int
     let totalSeconds: Int
+    let actionItemsCount: Int?      // NEW: Total action items this billing week
+    let uniqueContactIds: [String]? // NEW: Unique contact IDs this billing week
+
+    // Computed property for unique contacts count
+    var uniqueContactsCount: Int {
+        uniqueContactIds?.count ?? 0
+    }
+
+    // Safe accessors with defaults
+    var safeActionItemsCount: Int {
+        actionItemsCount ?? 0
+    }
 }
 
 extension UserPlan {
@@ -244,6 +256,15 @@ extension UserPlan {
 
     var usedMinutes: Int {
         Int(ceil(Double(weeklyUsage.totalSeconds) / 60.0))
+    }
+
+    // NEW: Direct access to weekly stats from user_plans (no debrief fetch needed)
+    var weeklyActionItemsCount: Int {
+        weeklyUsage.safeActionItemsCount
+    }
+
+    var weeklyUniqueContactsCount: Int {
+        weeklyUsage.uniqueContactsCount
     }
 
     // Tier-based limits (matching BillingConstants.kt)

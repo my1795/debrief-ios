@@ -56,57 +56,86 @@ struct StatsOverviewView: View {
             .padding(.horizontal)
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                // Use the calculated Weekly Stats from ViewModel
-                ForEach(viewModel.stats) { stat in
-                    MetricCard(
-                        title: stat.title,
-                        value: stat.value,
-                        icon: stat.icon,
-                        trendString: stat.subValue,
-                        infoText: getInfoText(for: stat.title)
-                    )
+                if viewModel.isLoadingWeeklyStats && viewModel.stats.isEmpty {
+                    // Show skeleton cards while loading
+                    ForEach(0..<4, id: \.self) { _ in
+                        MetricCardSkeleton()
+                    }
+                } else if viewModel.weeklyStatsError && viewModel.stats.isEmpty {
+                    // Show error state
+                    ForEach(0..<4, id: \.self) { index in
+                        MetricCardError(title: ["Total Debriefs", "Duration", "Action Items", "Contacts"][index])
+                    }
+                } else {
+                    // Use the calculated Weekly Stats from ViewModel
+                    ForEach(viewModel.stats) { stat in
+                        MetricCard(
+                            title: stat.title,
+                            value: stat.value,
+                            icon: stat.icon,
+                            trendString: stat.subValue,
+                            infoText: getInfoText(for: stat.title)
+                        )
+                    }
                 }
             }
             
             // MARK: - Quick Stats List
             VStack(alignment: .leading, spacing: 16) {
-                Text("Quick Stats")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                
-                VStack(spacing: 12) {
-                    QuickStatRow(
-                        icon: "clock",
-                        color: .teal,
-                        title: "Avg Duration",
-                        value: formatAvgDuration(viewModel.overview.avgDebriefDuration),
-                        subtitle: "Per Debrief (This Week)",
-                        infoText: "Average length of your debriefs recorded this week."
-                    )
-                    QuickStatRow(
-                        icon: "checklist", // Tasks icon
-                        color: .green,
-                        title: "Tasks Created",
-                        value: "\(viewModel.overview.totalActionItems)",
-                        subtitle: "Action Items (This Week)",
-                        infoText: "Total number of action items automatically extracted from your debriefs this week."
-                    )
-                    QuickStatRow(
-                        icon: "calendar",
-                        color: .orange,
-                        title: "Most Active Day",
-                        value: viewModel.overview.mostActiveDay,
-                        subtitle: "This Week",
-                        infoText: "The day of the week you recorded the most debriefs."
-                    )
-                    QuickStatRow(
-                        icon: "flame.fill",
-                        color: .red,
-                        title: "Longest Streak",
-                        value: "\(viewModel.overview.longestStreak) hrs",
-                        subtitle: "Consecutive Hours",
-                        infoText: "The longest sequence of consecutive hours where you recorded at least one debrief."
-                    )
+                HStack {
+                    Text("Quick Stats")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Spacer()
+                    if viewModel.quickStatsError {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                if viewModel.isLoadingQuickStats {
+                    // Loading skeleton
+                    VStack(spacing: 12) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            QuickStatRowSkeleton()
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        QuickStatRow(
+                            icon: "clock",
+                            color: .teal,
+                            title: "Avg Duration",
+                            value: formatAvgDuration(viewModel.overview.avgDebriefDuration),
+                            subtitle: "Per Debrief (This Week)",
+                            infoText: "Average length of your debriefs recorded this week."
+                        )
+                        QuickStatRow(
+                            icon: "checklist", // Tasks icon
+                            color: .green,
+                            title: "Tasks Created",
+                            value: "\(viewModel.overview.totalActionItems)",
+                            subtitle: "Action Items (This Week)",
+                            infoText: "Total number of action items automatically extracted from your debriefs this week."
+                        )
+                        QuickStatRow(
+                            icon: "calendar",
+                            color: .orange,
+                            title: "Most Active Day",
+                            value: viewModel.overview.mostActiveDay,
+                            subtitle: "This Week",
+                            infoText: "The day of the week you recorded the most debriefs."
+                        )
+                        QuickStatRow(
+                            icon: "flame.fill",
+                            color: .red,
+                            title: "Longest Streak",
+                            value: "\(viewModel.overview.longestStreak) hrs",
+                            subtitle: "Consecutive Hours",
+                            infoText: "The longest sequence of consecutive hours where you recorded at least one debrief."
+                        )
+                    }
                 }
             }
             .padding()
@@ -126,6 +155,12 @@ struct StatsOverviewView: View {
 
                     Spacer()
 
+                    if viewModel.quotaError {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
                     // Billing week info tooltip
                     Button(action: {}) {
                         Image(systemName: "info.circle")
@@ -135,49 +170,58 @@ struct StatsOverviewView: View {
                     .help("Billing week is a rolling 7-day period from your first debrief. Resets automatically.")
                 }
 
-                // Billing week period indicator
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
-                    Text("Billing Week")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
-                    Spacer()
-                    Text("Resets in \(viewModel.billingDaysRemaining) days")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                if viewModel.isLoadingQuota {
+                    // Loading skeleton
+                    VStack(spacing: 16) {
+                        QuotaRowSkeleton()
+                        QuotaRowSkeleton()
+                        QuotaRowSkeleton()
+                    }
+                } else {
+                    // Billing week period indicator
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text("Billing Week")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                        Spacer()
+                        Text("Resets in \(viewModel.billingDaysRemaining) days")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                VStack(spacing: 16) {
-                    QuotaRow(
-                        title: "Recordings",
-                        current: viewModel.quota.recordingsThisMonth,
-                        limit: viewModel.quota.recordingsLimit,
-                        percent: viewModel.recordingsQuotaPercent,
-                        subLabel: "this billing week"
-                    )
+                    VStack(spacing: 16) {
+                        QuotaRow(
+                            title: "Recordings",
+                            current: viewModel.quota.recordingsThisMonth,
+                            limit: viewModel.quota.recordingsLimit,
+                            percent: viewModel.recordingsQuotaPercent,
+                            subLabel: "this billing week"
+                        )
 
-                    QuotaRow(
-                        title: "Minutes",
-                        current: viewModel.quota.minutesThisMonth,
-                        limit: viewModel.quota.minutesLimit,
-                        percent: viewModel.minutesQuotaPercent,
-                        subLabel: "min this billing week"
-                    )
+                        QuotaRow(
+                            title: "Minutes",
+                            current: viewModel.quota.minutesThisMonth,
+                            limit: viewModel.quota.minutesLimit,
+                            percent: viewModel.minutesQuotaPercent,
+                            subLabel: "min this billing week"
+                        )
 
-                    QuotaRow(
-                        title: "Storage",
-                        current: viewModel.quota.storageUsedMB,
-                        limit: viewModel.quota.storageLimitMB,
-                        percent: viewModel.storageQuotaPercent,
-                        unit: "MB",
-                        subLabel: "lifetime"
-                    )
+                        QuotaRow(
+                            title: "Storage",
+                            current: viewModel.quota.storageUsedMB,
+                            limit: viewModel.quota.storageLimitMB,
+                            percent: viewModel.storageQuotaPercent,
+                            unit: "MB",
+                            subLabel: "lifetime"
+                        )
+                    }
                 }
             }
             .padding()
@@ -457,7 +501,7 @@ struct QuotaRow: View {
     let percent: Double
     var unit: String = ""
     var subLabel: String? = nil // e.g. "this week"
-    
+
     var body: some View {
         VStack(spacing: 8) {
             HStack {
@@ -465,17 +509,23 @@ struct QuotaRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.8))
                 Spacer()
-                Text("\(current) / \(limit) \(unit)\(subLabel != nil ? " " + subLabel! : "")")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                if limit == Int.max {
+                    Text("\(current) / ∞ \(unit)\(subLabel != nil ? " " + subLabel! : "")")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                } else {
+                    Text("\(current) / \(limit) \(unit)\(subLabel != nil ? " " + subLabel! : "")")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                }
             }
-            
+
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(Color.white.opacity(0.2))
                         .frame(height: 8)
-                    
+
                     Capsule()
                         .fill(percent > 0.8 ? Color.red : Color.teal)
                         .frame(width: max(0, min(geometry.size.width * CGFloat(percent), geometry.size.width)), height: 8)
@@ -483,5 +533,163 @@ struct QuotaRow: View {
             }
             .frame(height: 8)
         }
+    }
+}
+
+// MARK: - Skeleton Components
+
+struct MetricCardSkeleton: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title skeleton
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 80, height: 14)
+
+            // Value skeleton
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.15))
+                .frame(width: 60, height: 28)
+
+            // Trend skeleton
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 50, height: 12)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 150)
+        .background(.white.opacity(0.1))
+        .background(Material.ultraThin)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
+        .shimmer(isAnimating: isAnimating)
+        .onAppear { isAnimating = true }
+    }
+}
+
+struct MetricCardError: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+
+            Text("-")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(.white.opacity(0.4))
+
+            Text("Unable to load")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 150)
+        .background(.white.opacity(0.1))
+        .background(Material.ultraThin)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.orange.opacity(0.3), lineWidth: 1))
+    }
+}
+
+struct QuickStatRowSkeleton: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 80, height: 14)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 100, height: 10)
+                }
+            }
+            Spacer()
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.15))
+                .frame(width: 40, height: 16)
+        }
+        .shimmer(isAnimating: isAnimating)
+        .onAppear { isAnimating = true }
+    }
+}
+
+struct QuotaRowSkeleton: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 70, height: 14)
+                Spacer()
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 80, height: 14)
+            }
+
+            Capsule()
+                .fill(Color.white.opacity(0.1))
+                .frame(height: 8)
+        }
+        .shimmer(isAnimating: isAnimating)
+        .onAppear { isAnimating = true }
+    }
+}
+
+// MARK: - Shimmer Effect
+
+extension View {
+    func shimmer(isAnimating: Bool) -> some View {
+        self.modifier(ShimmerModifier(isAnimating: isAnimating))
+    }
+}
+
+struct ShimmerModifier: ViewModifier {
+    let isAnimating: Bool
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .white.opacity(0.1),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geometry.size.width * 2)
+                    .offset(x: -geometry.size.width + (geometry.size.width * 2 * phase))
+                }
+                .mask(content)
+            )
+            .onAppear {
+                guard isAnimating else { return }
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
     }
 }

@@ -129,12 +129,8 @@ struct DebriefFeedView: View {
                 SearchView()
             }
             .onAppear {
-                if viewModel.debriefs.isEmpty {
-                    Task {
-                        await viewModel.loadData(userId: userId)
-                        await viewModel.loadDailyStats(userId: userId)
-                    }
-                }
+                // Start snapshot listener - data loads from cache instantly, then syncs
+                viewModel.startObserving(userId: userId)
             }
             .sheet(isPresented: $showFilters) {
                 FilterSheet(filters: $viewModel.filters, isPresented: $showFilters) { newFilters in

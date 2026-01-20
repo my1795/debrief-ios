@@ -29,7 +29,13 @@ class StatsViewModel: ObservableObject {
     @Published var topContacts: [TopContactStat] = []
     @Published var isLoading = false
     @Published var isLoadingTopContacts = false // Calc state
+    @Published var isLoadingWeeklyStats = false // Widget stats loading
+    @Published var isLoadingQuickStats = false // Quick stats loading
+    @Published var isLoadingQuota = false // Quota loading
     @Published var error: AppError? = nil  // User-facing errors
+    @Published var weeklyStatsError: Bool = false // Error loading weekly stats
+    @Published var quickStatsError: Bool = false // Error loading quick stats
+    @Published var quotaError: Bool = false // Error loading quota
     
     // Recent Activity Chart Data (Keeping mock for now as API doesn't return history yet)
     @Published var recentActivity: [UsageEvent] = [
@@ -45,21 +51,125 @@ class StatsViewModel: ObservableObject {
     private let statsService: StatsServiceProtocol
     private var cancellables = Set<AnyCancellable>()
     
+    private var currentUserId: String?
+
     init(statsService: StatsServiceProtocol = StatsService()) {
         self.statsService = statsService
     }
-    
-    func loadData() async {
+
+    deinit {
+        cancellables.forEach { $0.cancel() }
+    }
+
+    // MARK: - Snapshot Listener Based Loading
+
+    /// Starts observing UserPlan with real-time updates.
+    /// ALL stats are derived from UserPlan - no separate debrief fetches needed.
+    func startObserving(userId: String) {
+        guard currentUserId != userId else { return } // Already observing
+        currentUserId = userId
+
         isLoading = true
+        isLoadingQuota = true
+        isLoadingWeeklyStats = true
+        isLoadingQuickStats = true
         error = nil
 
-        // Verify we have AuthSession user
+        // Cancel previous subscriptions
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+
+        // Single snapshot listener for UserPlan - provides ALL stats
+        FirestoreService.shared.observeUserPlan(userId: userId)
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { [weak self] completion in
+                    if case .failure(let err) = completion {
+                        print("❌ [StatsViewModel] UserPlan listener failed: \(err)")
+                        self?.error = AppError.from(err)
+                        self?.quotaError = true
+                        self?.weeklyStatsError = true
+                        self?.quickStatsError = true
+                    }
+                    self?.isLoading = false
+                    self?.isLoadingQuota = false
+                    self?.isLoadingWeeklyStats = false
+                    self?.isLoadingQuickStats = false
+                },
+                receiveValue: { [weak self] plan in
+                    guard let self = self else { return }
+
+                    print("⚡️ [StatsViewModel] Real-time UserPlan update received")
+
+                    self.userPlan = plan
+                    self.updateAllStatsFromPlan(plan)
+
+                    self.isLoading = false
+                    self.isLoadingQuota = false
+                    self.isLoadingWeeklyStats = false
+                    self.isLoadingQuickStats = false
+                    self.quotaError = false
+                    self.weeklyStatsError = false
+                    self.quickStatsError = false
+                }
+            )
+            .store(in: &cancellables)
+
+        // Top contacts still needs debrief fetch (with cache)
+        loadTopContactsWithCache(userId: userId)
+    }
+
+    /// Updates ALL stats from UserPlan data (no debrief fetch needed)
+    private func updateAllStatsFromPlan(_ plan: UserPlan) {
+        // 1. Quota
+        let userQuota = plan.toUserQuota()
+        self.quota = mapToStatsQuota(userQuota)
+
+        // 2. Widget Stats (from weeklyUsage)
+        let debriefCount = plan.weeklyUsage.debriefCount
+        let totalSeconds = plan.weeklyUsage.totalSeconds
+        let actionItemsCount = plan.weeklyActionItemsCount
+        let uniqueContactsCount = plan.weeklyUniqueContactsCount
+
+        let durationValue: String
+        if totalSeconds < 60 {
+            durationValue = "\(totalSeconds) sec"
+        } else {
+            durationValue = "\(Int(ceil(Double(totalSeconds) / 60.0))) min"
+        }
+
+        self.stats = [
+            StatsDisplayData(title: "Total Debriefs", value: "\(debriefCount)", subValue: nil, isPositive: nil, icon: "mic.fill"),
+            StatsDisplayData(title: "Duration per Week", value: durationValue, subValue: nil, isPositive: nil, icon: "clock.fill"),
+            StatsDisplayData(title: "Action Items", value: "\(actionItemsCount)", subValue: nil, isPositive: nil, icon: "checklist"),
+            StatsDisplayData(title: "Active Contacts", value: "\(uniqueContactsCount)", subValue: nil, isPositive: nil, icon: "person.2.fill")
+        ]
+
+        // 3. Overview Stats (from weeklyUsage)
+        let totalMinutes = Int(ceil(Double(totalSeconds) / 60.0))
+        let avgSeconds = debriefCount > 0 ? Double(totalSeconds) / Double(debriefCount) : 0.0
+
+        self.overview = StatsOverview(
+            totalDebriefs: debriefCount,
+            totalMinutes: totalMinutes,
+            totalActionItems: actionItemsCount,
+            totalContacts: uniqueContactsCount,
+            avgDebriefDuration: avgSeconds,
+            mostActiveDay: "-", // Would need additional tracking in backend
+            longestStreak: 0     // Would need additional tracking in backend
+        )
+
+        print("✅ [StatsViewModel] All stats updated from UserPlan (offline-ready)")
+    }
+
+    /// Legacy method - now starts snapshot listener
+    func loadData() async {
         guard let userId = AuthSession.shared.user?.id else {
             isLoading = false
             return
         }
 
-        // Ensure Firebase Auth is ready (prevents permission denied errors)
+        // Ensure Firebase Auth is ready
         if Auth.auth().currentUser == nil {
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard Auth.auth().currentUser != nil else {
@@ -68,33 +178,7 @@ class StatsViewModel: ObservableObject {
             }
         }
 
-        startObservingQuota(userId: userId)
-        // Trigger Top Contacts Calculation (Async, non-blocking)
-        loadTopContactsWithCache(userId: userId)
-        
-        await loadWidgetData()
-        await loadOverviewData()
-        
-        isLoading = false
-    }
-    
-    private func startObservingQuota(userId: String) {
-        // Observe UserPlan directly for billing week info
-        FirestoreService.shared.observeUserPlan(userId: userId)
-            .receive(on: DispatchQueue.main)
-            .sink(receiveCompletion: { [weak self] completion in
-                if case .failure(let error) = completion {
-                    print("❌ [StatsViewModel] UserPlan observation error: \(error)")
-                    // Keep existing quota or show error state if needed
-                }
-            }, receiveValue: { [weak self] plan in
-                print("⚡️ [StatsViewModel] Received real-time UserPlan update")
-                self?.userPlan = plan
-                // Convert to legacy UserQuota, then to StatsQuota for UI
-                let userQuota = plan.toUserQuota()
-                self?.quota = self?.mapToStatsQuota(userQuota) ?? .mock
-            })
-            .store(in: &cancellables)
+        startObserving(userId: userId)
     }
     
     // Helper to map Domain UserQuota to View Model StatsQuota
@@ -211,244 +295,11 @@ class StatsViewModel: ObservableObject {
         }
     }
     
-    private func loadWidgetData() async {
-        do {
-            // Use Stats Week (Sunday-Sunday) for consistent week bounds
-            let (thisWeekStart, thisWeekEnd) = statsWeekProvider.currentWeekRange()
-            let (prevWeekStart, prevWeekEnd) = previousWeekBounds(for: Date())
-            
-            // We need USER ID to fetch data
-            // Assuming we can get it from AuthSession or injected. 
-            // Since this is a ViewModel, we might need to inject it or fetch from AuthSession singleton if unavoidable.
-            // Ideally passing it in loadData is better, but for now lets try to get it from where StatsService gets it?
-            // Wait, StatsService doesn't store userId. 
-            // Fix: We must access AuthSession.shared or inject it.
-            // For now, assuming we can get current user ID. 
-            guard let userId = AuthSession.shared.user?.id else { return }
-
-            // Fetch actual documents to allow flexible calculation (Minutes, Unique Contacts)
-            // Fetch Consolidated Stats
-            async let thisWeekStats = FirestoreService.shared.getWeeklyStats(userId: userId, start: thisWeekStart, end: thisWeekEnd)
-            async let prevWeekStats = FirestoreService.shared.getWeeklyStats(userId: userId, start: prevWeekStart, end: prevWeekEnd)
-            
-            let (curr, prev) = try await (thisWeekStats, prevWeekStats)
-            
-            // --- 1. Debriefs Count ---
-            let debCurr = curr.count
-            let debPrev = prev.count
-            let debriefTrend = calculateTrend(current: Double(debCurr), previous: Double(debPrev))
-            
-            // --- 2. Action Items Count ---
-            let actionItemsCurr = curr.actionItems
-            let actionItemsPrev = prev.actionItems
-            let actionItemsTrend = calculateTrend(current: Double(actionItemsCurr), previous: Double(actionItemsPrev))
-            
-            // --- 3. Unique Contacts ---
-            let uniqueContactsCurr = curr.uniqueContacts
-            let uniqueContactsPrev = prev.uniqueContacts
-            let contactsTrend = calculateTrend(current: Double(uniqueContactsCurr), previous: Double(uniqueContactsPrev))
-            
-            // --- 4. Total Duration ---
-            let totalSecsCurr = curr.duration
-            let totalSecsPrev = prev.duration
-            let minTrend = calculateTrend(current: Double(totalSecsCurr), previous: Double(totalSecsPrev))
-            
-            // Formatting: Duration
-            let durationValue: String
-            if totalSecsCurr < 60 {
-                durationValue = "\(totalSecsCurr) sec"
-            } else {
-                durationValue = "\(Int(ceil(Double(totalSecsCurr) / 60.0))) min"
-            }
-            
-            self.stats = [
-                StatsDisplayData(title: "Total Debriefs", value: "\(debCurr)", subValue: debriefTrend, isPositive: isPositive(debCurr, debPrev), icon: "mic.fill"),
-                StatsDisplayData(title: "Duration per Week", value: durationValue, subValue: minTrend, isPositive: isPositive(totalSecsCurr, totalSecsPrev), icon: "clock.fill"),
-                StatsDisplayData(title: "Action Items", value: "\(actionItemsCurr)", subValue: actionItemsTrend, isPositive: isPositive(actionItemsCurr, actionItemsPrev), icon: "checklist"),
-                StatsDisplayData(title: "Active Contacts", value: "\(uniqueContactsCurr)", subValue: contactsTrend, isPositive: isPositive(uniqueContactsCurr, uniqueContactsPrev), icon: "person.2.fill")
-            ]
-            
-        } catch {
-            print("Widget Stats Error: \(error)")
-        }
-    }
-    
-    private func loadOverviewData() async {
-        do {
-            print("🔄 [StatsViewModel] Loading overview data...")
-            // Fetch ONLY current week's debriefs for efficiency
-            guard let userId = AuthSession.shared.user?.id else {
-                 print("⚠️ [StatsViewModel] No User ID found in session")
-                 return
-            }
-
-            // Use Stats Week (Sunday-Sunday) for consistent week bounds
-            let (startOfWeek, endOfWeek) = statsWeekProvider.currentWeekRange()
-            let now = Date()
-            let fetchEnd = min(now, endOfWeek) // Don't fetch future data
-
-            print("📅 [StatsViewModel] Stats Week: \(startOfWeek) to \(endOfWeek)")
-
-            // Fetch only necessary range
-            // NOTE: 'Streak' calculation is now limited to the fetched range (Current Week).
-            // For all-time streak, we should rely on a persisted user stat in future iterations.
-            let weeklyDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: startOfWeek, end: fetchEnd)
-            print("✅ [StatsViewModel] Fetched \(weeklyDebriefs.count) debriefs for weekly overview")
-
-            // Calculate stats from the limited set (Running on Main Actor is fine for < 100 items)
-            let stats = calculateStats(from: weeklyDebriefs, isWeeklySet: true)
-            self.overview = stats
-            
-            // Update Widgets with real data derived from all debriefs if needed, 
-            // or keep using Weekly Stats as is (which fetches range separately).
-            // For efficiency, we COUDLD reuse `allDebriefs` for widgets too if we filter locally.
-            // But let's leave loadWidgetData separate for now to avoid huge refactor risk, 
-            // focusing on "Quick Stats" correctness first. 
-
-        } catch {
-            print("❌ Overview Stats Error: \(error)")
-        }
-    }
-    
-    private func calculateStats(from debriefs: [Debrief], isWeeklySet: Bool = false) -> StatsOverview {
-        if debriefs.isEmpty { return .empty }
-        
-        // If the set came pre-filtered (isWeeklySet), use it directly.
-        // Otherwise handle filtering (legacy path).
-        let weeklyDebriefs: [Debrief]
-        if isWeeklySet {
-            weeklyDebriefs = debriefs
-        } else {
-             // Fallback logic if passed full array
-             var calendar = Calendar.current
-             calendar.firstWeekday = 1
-             let now = Date()
-             let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
-             weeklyDebriefs = debriefs.filter { $0.occurredAt >= startOfWeek }
-        }
-        
-        // 1. Total Counts (Weekly)
-        let totalDebriefs = weeklyDebriefs.count
-        let totalSeconds = weeklyDebriefs.reduce(0) { $0 + $1.duration }
-        let totalMinutes = Int(totalSeconds / 60)
-        let totalActionItems = weeklyDebriefs.reduce(0) { $0 + ($1.actionItems?.count ?? 0) }
-        
-        // 2. Unique Contacts (Weekly)
-        let uniqueContacts = Set(weeklyDebriefs.compactMap { $0.contactId.isEmpty ? nil : $0.contactId }).count
-        
-        // 3. Average Duration (Weekly)
-        let avgSeconds = totalDebriefs > 0 ? totalSeconds / Double(totalDebriefs) : 0.0
-        
-        // 4. Most Active Day (Weekly - although less meaningful for just 1 week, it shows the active day of THIS week)
-        // If user wants general pattern, All-Time is better. But requested "Weekly" to avoid huge processing.
-        // Let's stick to Weekly as requested to avoid all-time iteration if list is huge.
-        var dayCounts: [Int: Int] = [:] 
-        for d in weeklyDebriefs {
-            let weekday = Calendar.current.component(.weekday, from: d.occurredAt)
-            dayCounts[weekday, default: 0] += 1
-        }
-        let maxDay = dayCounts.max(by: { $0.value < $1.value })?.key
-        let mostActiveDayStr = dayCounts.isEmpty ? "-" : dayName(for: maxDay)
-        
-        // 5. Longest Streak (Consecutive Hours)
-        // Streak inherently needs history to be meaningful. 
-        // If we strictly limit to 7 days, a 100-day streak becomes 7 days. 
-        // We will calculate streak on the FETCHED dataset (which user previously agreed could be limited or all-time).
-        // For now, we use `allDebriefs` for streak to be accurate, as streak is usually an "All Time" bragging right.
-        // If "All Time" fetch is banned, we can't show true streak. 
-        // Assuming we fetched all, we calculate streak on all. 
-        // Streak is calculated on the dataset available. 
-        // If we only fetch weekly data, this shows 'Weekly Streak'.
-        let streak = calculateHourlyStreak(debriefs: debriefs)
-        
-        return StatsOverview(
-            totalDebriefs: totalDebriefs,
-            totalMinutes: totalMinutes,
-            totalActionItems: totalActionItems,
-            totalContacts: uniqueContacts,
-            avgDebriefDuration: avgSeconds, // Weekly Average
-            mostActiveDay: mostActiveDayStr,
-            longestStreak: streak // All-time Streak based on fetched data
-        )
-    }
-    
-    private func calculateHourlyStreak(debriefs: [Debrief]) -> Int {
-        // defined as: sequence of consecutive hours having >=1 debrief
-        // Strategy: 
-        // 1. Get Set of unique "Hour-Buckets" (e.g. Timestamp of the hour or just Int(timeInterval/3600))
-        // 2. Sort them.
-        // 3. Iterate to find longest sequence (current == prev + 1)
-        
-        let hours = debriefs.map { Int($0.occurredAt.timeIntervalSince1970 / 3600) }
-        let uniqueHours = Array(Set(hours)).sorted()
-        
-        if uniqueHours.isEmpty { return 0 }
-        
-        var maxStreak = 1
-        var currentStreak = 1
-        
-        for i in 1..<uniqueHours.count {
-            if uniqueHours[i] == uniqueHours[i-1] + 1 {
-                currentStreak += 1
-            } else {
-                maxStreak = max(maxStreak, currentStreak)
-                currentStreak = 1
-            }
-        }
-        maxStreak = max(maxStreak, currentStreak) // Check last run
-        
-        return maxStreak
-    }
-    
-    private func dayName(for weekday: Int?) -> String {
-        guard let w = weekday else { return "-" }
-        // Calendar weekday: 1=Sun
-        switch w {
-        case 1: return "Sunday"
-        case 2: return "Monday"
-        case 3: return "Tuesday"
-        case 4: return "Wednesday"
-        case 5: return "Thursday"
-        case 6: return "Friday"
-        case 7: return "Saturday"
-        default: return "-"
-        }
-    }
-    
     // MARK: - Helpers
 
     /// Stats Week Provider for consistent Sunday-Sunday week bounds
     private let statsWeekProvider = StatsWeekProvider()
 
-    /// Returns Sunday-Sunday week bounds (Stats Week - calendar based)
-    private func weekBounds(for date: Date) -> (start: Date, end: Date) {
-        return statsWeekProvider.currentWeekRange()
-    }
-
-    /// Returns previous week bounds (Sunday-Sunday)
-    private func previousWeekBounds(for date: Date) -> (start: Date, end: Date) {
-        let current = statsWeekProvider.currentWeekRange()
-        let calendar = Calendar.current
-        guard let prevStart = calendar.date(byAdding: .day, value: -7, to: current.start),
-              let prevEnd = calendar.date(byAdding: .day, value: -7, to: current.end) else {
-            return (Date(), Date())
-        }
-        return (prevStart, prevEnd)
-    }
-    
-    private func calculateTrend(current: Double, previous: Double) -> String? {
-        if previous == 0 {
-            return current > 0 ? "+100%" : nil
-        }
-        let change = ((current - previous) / previous) * 100
-        return String(format: "%+.0f%%", change)
-    }
-    
-    private func isPositive(_ current: Int, _ previous: Int) -> Bool? {
-        if current == previous { return nil }
-        return current > previous
-    }
-    
     // Computed Properties for Quota Percentages
     var recordingsQuotaPercent: Double {
         guard quota.recordingsLimit > 0, quota.recordingsLimit != Int.max else { return 0 }
