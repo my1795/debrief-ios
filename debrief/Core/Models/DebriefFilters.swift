@@ -46,18 +46,22 @@ struct DebriefFilters: Equatable {
         customEndDate = Date()
     }
     
+    // Use StatsWeekProvider for consistent Sunday-Sunday week bounds
+    private static let statsWeekProvider = StatsWeekProvider()
+
     // Computed properties for query consumption
     var startDate: Date? {
         var calendar = Calendar.current
         calendar.firstWeekday = 1 // Sunday
         let now = Date()
-        
+
         switch dateOption {
         case .today:
             return calendar.startOfDay(for: now)
-        case .thisWeek: // Current Week (Sunday to Sunday)
-            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
-            return calendar.date(from: components)
+        case .thisWeek: // Current Stats Week (Sunday to Sunday)
+            // Use StatsWeekProvider for consistent week bounds across the app
+            let (start, _) = Self.statsWeekProvider.currentWeekRange()
+            return start
         case .thisMonth: // Current Month
             let components = calendar.dateComponents([.year, .month], from: now)
             return calendar.date(from: components)
@@ -67,9 +71,13 @@ struct DebriefFilters: Equatable {
             return nil
         }
     }
-    
+
     var endDate: Date? {
         switch dateOption {
+        case .thisWeek:
+            // Use StatsWeekProvider for consistent week bounds
+            let (_, end) = Self.statsWeekProvider.currentWeekRange()
+            return end
         case .custom:
             // End of the selected end date
             let calendar = Calendar.current

@@ -180,17 +180,16 @@ private extension Debrief {
         }
     }
     
-    /// Tries to decode duration from standard or legacy keys, defaulting to 0
+    /// Tries to decode duration from backend field (audioDurationSec), defaulting to 0
     static func decodeDuration(from container: KeyedDecodingContainer<CodingKeys>) -> TimeInterval {
-        // Try duration (Double)
-        if let d = try? container.decode(TimeInterval.self, forKey: .duration) { return d }
-        // Try duration (Int)
-        if let d = try? container.decode(Int.self, forKey: .duration) { return TimeInterval(d) }
-        
-        // Legacy keys
+        // Backend field name is audioDurationSec
         if let d = try? container.decode(TimeInterval.self, forKey: .audioDurationSec) { return d }
         if let d = try? container.decode(Int.self, forKey: .audioDurationSec) { return TimeInterval(d) }
-        
+
+        // Fallback to duration (for local/pending debriefs)
+        if let d = try? container.decode(TimeInterval.self, forKey: .duration) { return d }
+        if let d = try? container.decode(Int.self, forKey: .duration) { return TimeInterval(d) }
+
         return 0
     }
 }

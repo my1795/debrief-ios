@@ -125,64 +125,82 @@ class FirestoreService {
     }
     
     // MARK: - Quota Observation (Real-time)
-    
-    func observeQuota(userId: String) -> AnyPublisher<UserQuota, Error> {
-        let subject = PassthroughSubject<UserQuota, Error>()
-        
-        let listener = db.collection("user_quotas")
-            .whereField("userId", isEqualTo: userId)
+
+    /// Observes user_plans collection for real-time billing updates (NEW v2 system)
+    func observeUserPlan(userId: String) -> AnyPublisher<UserPlan, Error> {
+        let subject = PassthroughSubject<UserPlan, Error>()
+
+        // user_plans document ID is the userId itself (planId == userId)
+        let listener = db.collection("user_plans")
+            .document(userId)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     subject.send(completion: .failure(error))
                     return
                 }
-                
-                guard let document = snapshot?.documents.first else {
+
+                guard let document = snapshot, document.exists else {
+                    print("⚠️ [FirestoreService] No user_plan found for \(userId)")
                     return
                 }
-                
-                print("🔍 [FirestoreService] Quota Document ID: \(document.documentID)")
-                
+
                 do {
-                    let quota = try document.data(as: UserQuota.self)
-                    subject.send(quota)
+                    let plan = try document.data(as: UserPlan.self)
+                    subject.send(plan)
                 } catch {
+                    print("❌ [FirestoreService] Failed to decode UserPlan: \(error)")
                     subject.send(completion: .failure(error))
                 }
             }
-        
+
         return subject
             .handleEvents(receiveCancel: {
                 listener.remove()
             })
             .eraseToAnyPublisher()
     }
-    
-    // One-shot fetch for quota logic (e.g. checks after recording)
-    func getUserQuota(userId: String) async throws -> UserQuota {
-        let snapshot = try await db.collection("user_quotas")
-            .whereField("userId", isEqualTo: userId)
-            .getDocuments()
-        
-        guard let doc = snapshot.documents.first else {
-            // Return default/mock if not found
-            // Correct order based on struct definition:
-            // userId, subscriptionTier, weeklyDebriefs, weeklyRecordingMinutes, storageLimitMB, usedDebriefs, usedRecordingSeconds, usedStorageMB, currentPeriodStart, currentPeriodEnd
-            return UserQuota(
+
+    /// Legacy method - now wraps observeUserPlan for backward compatibility
+    func observeQuota(userId: String) -> AnyPublisher<UserQuota, Error> {
+        observeUserPlan(userId: userId)
+            .map { plan in
+                plan.toUserQuota()
+            }
+            .eraseToAnyPublisher()
+    }
+
+    /// Fetches user plan directly (NEW v2 system)
+    func getUserPlan(userId: String) async throws -> UserPlan {
+        let document = try await db.collection("user_plans")
+            .document(userId)
+            .getDocument()
+
+        guard document.exists else {
+            // Return default FREE plan if not found
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            let weekEnd = now + (7 * 24 * 60 * 60 * 1000) // +7 days
+
+            return UserPlan(
+                planId: nil,
                 userId: userId,
-                subscriptionTier: "Free",
-                weeklyDebriefs: 5,
-                weeklyRecordingMinutes: 10,
-                storageLimitMB: 500,
-                usedDebriefs: 0,
-                usedRecordingSeconds: 0,
+                tier: "FREE",
+                billingWeekStart: now,
+                billingWeekEnd: weekEnd,
+                weeklyUsage: UserPlanWeeklyUsage(debriefCount: 0, totalSeconds: 0),
                 usedStorageMB: 0,
-                currentPeriodStart: nil,
-                currentPeriodEnd: nil
+                subscriptionEnd: nil,
+                createdAt: now,
+                updatedAt: now
             )
         }
-        
-        return try doc.data(as: UserQuota.self)
+
+        return try document.data(as: UserPlan.self)
+    }
+
+    /// Legacy method - now wraps getUserPlan for backward compatibility
+    func getUserQuota(userId: String) async throws -> UserQuota {
+        let plan = try await getUserPlan(userId: userId)
+        return plan.toUserQuota()
     }
     // MARK: - Convenience Fetch Methods (use main fetchDebriefs internally)
     
@@ -306,8 +324,8 @@ class FirestoreService {
         
         let countQuery = db.collection("calls")
             .whereField("userId", isEqualTo: userId)
-            .whereField("timestamp", isGreaterThanOrEqualTo: startMs)
-            .whereField("timestamp", isLessThan: endMs)
+            .whereField("callTimestamp", isGreaterThanOrEqualTo: startMs)
+            .whereField("callTimestamp", isLessThan: endMs)
             .count
         
         let snapshot = try await countQuery.getAggregation(source: AggregateSource.server)
@@ -339,18 +357,16 @@ class FirestoreService {
         // Fetch calls count (separate collection)
         async let callsCountQuery = db.collection("calls")
             .whereField("userId", isEqualTo: userId)
-            .whereField("timestamp", isGreaterThanOrEqualTo: startMs)
-            .whereField("timestamp", isLessThan: endMs)
+            .whereField("callTimestamp", isGreaterThanOrEqualTo: startMs)
+            .whereField("callTimestamp", isLessThan: endMs)
             .count
             .getAggregation(source: .server)
         
         let (debriefsDocs, callsAgg) = try await (debriefsSnapshot, callsCountQuery)
         
-        // Calculate duration from debriefs
+        // Calculate duration from debriefs (audioDurationSec is the backend field name)
         let totalDuration = debriefsDocs.documents.reduce(0) { sum, doc in
             let data = doc.data()
-            if let d = data["duration"] as? Double { return sum + Int(d) }
-            if let d = data["duration"] as? Int { return sum + d }
             if let d = data["audioDurationSec"] as? Double { return sum + Int(d) }
             if let d = data["audioDurationSec"] as? Int { return sum + d }
             return sum
@@ -375,19 +391,12 @@ class FirestoreService {
             .whereField("occurredAt", isLessThan: endMs)
             .getDocuments()
         
-        // Manual Summation for Robustness
-        // Backend might have `duration` OR `audioDurationSec` (legacy).
-        // Server-side aggregate only sums one field. Client-side processing covers both.
-        // We access the dictionary directly to avoid full object coding cost.
+        // Manual Summation - audioDurationSec is the backend field name
         let totalSeconds = snapshot.documents.reduce(0.0) { sum, doc in
             let data = doc.data()
             var duration: Double = 0
-            
-            if let d = data["duration"] as? Double {
-                duration = d
-            } else if let d = data["duration"] as? Int { // Handle Int storage
-                duration = Double(d)
-            } else if let d = data["audioDurationSec"] as? Double {
+
+            if let d = data["audioDurationSec"] as? Double {
                 duration = d
             } else if let d = data["audioDurationSec"] as? Int {
                 duration = Double(d)
@@ -444,56 +453,65 @@ class FirestoreService {
     }
     
     // MARK: - Consolidated Weekly Stats
-    
-    /// Fetches all weekly stats in a single optimized query
+
+    /// Fetches weekly stats using Firestore aggregation for optimal performance
+    /// - count: Uses count aggregation (no document download)
+    /// - duration: Uses sum aggregation (no document download)
+    /// - actionItems/uniqueContacts: Requires document fetch (minimized fields)
     func getWeeklyStats(userId: String, start: Date, end: Date) async throws -> WeeklyStats {
         let startMs = Int64(start.timeIntervalSince1970 * 1000)
         let endMs = Int64(end.timeIntervalSince1970 * 1000)
-        
-        let snapshot = try await db.collection("debriefs")
+
+        let baseQuery = db.collection("debriefs")
             .whereField("userId", isEqualTo: userId)
             .whereField("occurredAt", isGreaterThanOrEqualTo: startMs)
             .whereField("occurredAt", isLessThan: endMs)
-            .getDocuments()
-        
-        // Process on background thread to avoid Main Thread hang with 10k+ items
-        return try await Task.detached(priority: .userInitiated) {
-            var totalDuration: Double = 0
+
+        // Run aggregation queries in parallel - these don't download documents
+        async let countTask = baseQuery.count.getAggregation(source: .server)
+        async let sumTask = baseQuery.aggregate([AggregateField.sum("audioDurationSec")]).getAggregation(source: .server)
+
+        // For actionItems and uniqueContacts, we need document data
+        // Fetch in parallel with aggregations
+        async let docsTask = baseQuery.getDocuments()
+
+        let (countSnapshot, sumSnapshot, docsSnapshot) = try await (countTask, sumTask, docsTask)
+
+        // Extract aggregation results
+        let count = Int(countSnapshot.count)
+        let totalDuration: Double
+        if let sumValue = sumSnapshot.get(AggregateField.sum("audioDurationSec")) as? NSNumber {
+            totalDuration = sumValue.doubleValue
+        } else {
+            totalDuration = 0
+        }
+
+        // Process actionItems and uniqueContacts on background thread
+        let (actionItems, uniqueContacts) = await Task.detached(priority: .userInitiated) {
             var totalActionItems = 0
             var contactIds = Set<String>()
-            
-            for doc in snapshot.documents {
+
+            for doc in docsSnapshot.documents {
                 let data = doc.data()
-                
-                // Duration
-                if let d = data["duration"] as? Double {
-                    totalDuration += d
-                } else if let d = data["duration"] as? Int {
-                    totalDuration += Double(d)
-                } else if let d = data["audioDurationSec"] as? Double {
-                    totalDuration += d
-                } else if let d = data["audioDurationSec"] as? Int {
-                    totalDuration += Double(d)
-                }
-                
-                // Action Items
+
                 if let items = data["actionItems"] as? [String] {
                     totalActionItems += items.count
                 }
-                
-                // Unique Contacts
+
                 if let cid = data["contactId"] as? String, !cid.isEmpty {
                     contactIds.insert(cid)
                 }
             }
-            
-            return WeeklyStats(
-                count: snapshot.documents.count,
-                duration: Int(totalDuration),
-                actionItems: totalActionItems,
-                uniqueContacts: contactIds.count
-            )
+
+            return (totalActionItems, contactIds.count)
         }.value
+
+        return WeeklyStats(
+            count: count,
+            duration: Int(totalDuration),
+            actionItems: actionItems,
+            uniqueContacts: uniqueContacts
+        )
     }
     
     // MARK: - Encryption Support

@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 import Contacts
 import UserNotifications
 
@@ -16,7 +17,11 @@ enum RecordingState {
     case selectContact
     case processing
     case complete
+    case quotaExceeded(reason: QuotaExceededReason)
 }
+
+/// Maximum recording duration in seconds (10 minutes)
+private let maxRecordingDurationSeconds: TimeInterval = 600
 
 @MainActor
 class RecordViewModel: ObservableObject {
@@ -103,15 +108,59 @@ class RecordViewModel: ObservableObject {
     }
     
     func startRecording() async {
+        // Pre-flight quota check - better UX than failing after long recording
+        if let quotaReason = await checkQuotaBeforeRecording() {
+            state = .quotaExceeded(reason: quotaReason)
+            return
+        }
+
         let granted = await recorderService.requestPermission()
         guard granted else { return }
-        
+
         do {
             try await recorderService.startRecording()
             state = .recording
             startTimer()
         } catch {
             print("Failed to start: \(error)")
+        }
+    }
+
+    /// Pre-flight check: Can user start a new recording?
+    /// Returns nil if OK, or QuotaExceededReason if blocked
+    private func checkQuotaBeforeRecording() async -> QuotaExceededReason? {
+        guard let userId = AuthSession.shared.user?.id else { return nil }
+
+        // Ensure Firebase Auth is ready before making Firestore calls
+        guard Auth.auth().currentUser != nil else {
+            print("⚠️ [RecordViewModel] Firebase Auth not ready, skipping pre-flight check")
+            return nil // Don't block recording, backend will validate
+        }
+
+        do {
+            let plan = try await FirestoreService.shared.getUserPlan(userId: userId)
+
+            // Check debrief count limit
+            if !plan.isUnlimitedDebriefs && plan.weeklyUsage.debriefCount >= plan.weeklyDebriefLimit {
+                return .weeklyDebriefLimit
+            }
+
+            // Check minutes limit (allow at least 1 minute buffer)
+            let usedMinutes = plan.usedMinutes
+            if !plan.isUnlimitedMinutes && usedMinutes >= plan.weeklyMinutesLimit {
+                return .weeklyMinutesLimit
+            }
+
+            // Check storage limit (need at least ~10MB for a recording)
+            if !plan.isUnlimitedStorage && plan.usedStorageMB >= (plan.storageLimitMB - 10) {
+                return .storageLimit
+            }
+
+            return nil
+        } catch {
+            print("⚠️ [RecordViewModel] Pre-flight quota check failed: \(error)")
+            // Don't block recording if check fails - backend will validate
+            return nil
         }
     }
     
@@ -125,22 +174,38 @@ class RecordViewModel: ObservableObject {
     
     private func startTimer() {
         timerTask?.cancel()
-        
+
         timerTask = Task { [weak self] in
             guard let self = self else { return }
-            
+
             while !Task.isCancelled {
                 // Update time roughly every 0.1s ensures smooth UI without blocking main thread
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 sec
-                
+
                 guard !Task.isCancelled else { break }
-                
+
                 let currentTime = self.recorderService.currentTime
                 await MainActor.run {
                     self.recordingTime = currentTime
+
+                    // Auto-stop at max duration (600 seconds / 10 minutes)
+                    if currentTime >= maxRecordingDurationSeconds {
+                        print("⏱️ [RecordViewModel] Max duration reached (\(maxRecordingDurationSeconds)s), auto-stopping")
+                        self.stopRecording()
+                    }
                 }
             }
         }
+    }
+
+    /// Check if recording is approaching the limit (for UI warning)
+    var isApproachingLimit: Bool {
+        recordingTime >= (maxRecordingDurationSeconds - 60) // Warning at 9 minutes
+    }
+
+    /// Remaining recording time in seconds
+    var remainingTime: TimeInterval {
+        max(0, maxRecordingDurationSeconds - recordingTime)
     }
     
     // MARK: - Contact Actions

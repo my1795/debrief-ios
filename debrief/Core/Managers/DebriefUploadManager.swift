@@ -13,14 +13,18 @@ import UserNotifications
 @MainActor
 class DebriefUploadManager: ObservableObject {
     static let shared = DebriefUploadManager()
-    
+
     // The source of truth for debriefs (both pending and confirmed)
     // HomeViewModel should observe this or merge it with Firestore results
     @Published var pendingDebriefs: [Debrief] = []
-    
+
+    // Quota exceeded state for UI notification
+    @Published var quotaExceededReason: QuotaExceededReason?
+    @Published var showQuotaExceededAlert = false
+
     // Keep track of listeners to avoid leaks
     private var listeners: [String: ListenerRegistration] = [:]
-    
+
     private let apiService = APIService.shared
     
     private init() {
@@ -112,9 +116,28 @@ class DebriefUploadManager: ObservableObject {
     }
     
     private func handleUploadFailure(tempId: String, error: Error) {
+        // Check if this is a quota exceeded error
+        if case APIError.quotaExceeded(let reason) = error {
+            print("⚠️ [UploadManager] Quota exceeded: \(reason.rawValue)")
+
+            // Remove the optimistic debrief from pending list
+            if let index = pendingDebriefs.firstIndex(where: { $0.id == tempId }) {
+                pendingDebriefs.remove(at: index)
+            }
+
+            // Set the quota exceeded state for UI
+            quotaExceededReason = reason
+            showQuotaExceededAlert = true
+
+            // Send specific notification
+            sendQuotaExceededNotification(reason: reason)
+            return
+        }
+
+        // Handle other failures
         if let index = pendingDebriefs.firstIndex(where: { $0.id == tempId }) {
             // Update status to failed
-            var failedDebrief = pendingDebriefs[index]
+            let failedDebrief = pendingDebriefs[index]
             // We need to mutate Debrief to support 'failed', status is already mutable via copy
             // Since Debrief is a struct, we create a new copy with .failed status
             let newDebrief = Debrief(
@@ -132,9 +155,25 @@ class DebriefUploadManager: ObservableObject {
             )
             pendingDebriefs[index] = newDebrief
         }
-        
+
         // 3. Notify User
         sendFailureNotification()
+    }
+
+    private func sendQuotaExceededNotification(reason: QuotaExceededReason) {
+        let content = UNMutableNotificationContent()
+        content.title = "Limit Reached"
+        content.body = reason.userMessage
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: "quota_exceeded_\(reason.rawValue)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Clear the quota exceeded alert state
+    func clearQuotaExceededAlert() {
+        quotaExceededReason = nil
+        showQuotaExceededAlert = false
     }
     
     private func startListening(debriefId: String) {

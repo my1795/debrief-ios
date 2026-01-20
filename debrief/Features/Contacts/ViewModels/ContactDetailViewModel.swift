@@ -208,34 +208,19 @@ class ContactDetailViewModel: ObservableObject {
                 self.lastMetString = "-"
             }
             
-            // 3. Duration
-            // We fetch ALL docs to calculate duration accurately.
-            // WARNING: This downloads all documents. In production with 1000+ debriefs, this should be an aggregation query.
+            // 3. Duration - Use Firestore aggregation (sum) for performance
+            // This avoids downloading all documents
             if count > 0 {
-                let allDocs = try await baseQuery.getDocuments()
-                let totalDur = allDocs.documents.reduce(0.0) { sum, doc in
-                    let data = doc.data()
-                    
-                    // Try "duration" field first (Double or Int)
-                    if let d = data["duration"] as? Double, d > 0 {
-                        return sum + d
-                    }
-                    if let d = data["duration"] as? Int, d > 0 {
-                        return sum + Double(d)
-                    }
-                    
-                    // Fallback to "audioDurationSec" (legacy field)
-                    if let d = data["audioDurationSec"] as? Double, d > 0 {
-                        return sum + d
-                    }
-                    if let d = data["audioDurationSec"] as? Int, d > 0 {
-                        return sum + Double(d)
-                    }
-                    
-                    return sum
+                let sumQuery = baseQuery.aggregate([AggregateField.sum("audioDurationSec")])
+                let sumSnapshot = try await sumQuery.getAggregation(source: .server)
+
+                // Extract sum result - Firestore returns NSNumber
+                if let sumValue = sumSnapshot.get(AggregateField.sum("audioDurationSec")) as? NSNumber {
+                    self.totalDuration = sumValue.doubleValue
+                } else {
+                    // Fallback: If sum returns nil, set to 0
+                    self.totalDuration = 0
                 }
-                
-                self.totalDuration = totalDur
             } else {
                 self.totalDuration = 0
             }

@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 
 struct StatsDisplayData: Identifiable {
@@ -51,14 +52,25 @@ class StatsViewModel: ObservableObject {
     func loadData() async {
         isLoading = true
         error = nil
-        print("📊 [StatsViewModel] Starting loadData...") // LOGGING
-        
-        // Start Real-time Quota Observation
-        if let userId = AuthSession.shared.user?.id {
-            startObservingQuota(userId: userId)
-            // Trigger Top Contacts Calculation (Async, non-blocking)
-            loadTopContactsWithCache(userId: userId)
+
+        // Verify we have AuthSession user
+        guard let userId = AuthSession.shared.user?.id else {
+            isLoading = false
+            return
         }
+
+        // Ensure Firebase Auth is ready (prevents permission denied errors)
+        if Auth.auth().currentUser == nil {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard Auth.auth().currentUser != nil else {
+                isLoading = false
+                return
+            }
+        }
+
+        startObservingQuota(userId: userId)
+        // Trigger Top Contacts Calculation (Async, non-blocking)
+        loadTopContactsWithCache(userId: userId)
         
         await loadWidgetData()
         await loadOverviewData()
@@ -67,20 +79,20 @@ class StatsViewModel: ObservableObject {
     }
     
     private func startObservingQuota(userId: String) {
-        FirestoreService.shared.observeQuota(userId: userId)
+        // Observe UserPlan directly for billing week info
+        FirestoreService.shared.observeUserPlan(userId: userId)
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { [weak self] completion in
                 if case .failure(let error) = completion {
-                    print("❌ [StatsViewModel] Quota observation error: \(error)")
+                    print("❌ [StatsViewModel] UserPlan observation error: \(error)")
                     // Keep existing quota or show error state if needed
                 }
-            }, receiveValue: { [weak self] newQuota in
-                print("⚡️ [StatsViewModel] Received real-time quota update")
-                // Map UserQuota (Domain Model) to StatsQuota (View Model) 
-                // Currently StatsQuota seems to be a separate struct in StatsModels.
-                // We need to map it. Assuming UserQuota properties match mostly.
-                // Let's create a mapper or manual map.
-                self?.quota = self?.mapToStatsQuota(newQuota) ?? .mock
+            }, receiveValue: { [weak self] plan in
+                print("⚡️ [StatsViewModel] Received real-time UserPlan update")
+                self?.userPlan = plan
+                // Convert to legacy UserQuota, then to StatsQuota for UI
+                let userQuota = plan.toUserQuota()
+                self?.quota = self?.mapToStatsQuota(userQuota) ?? .mock
             })
             .store(in: &cancellables)
     }
@@ -103,90 +115,107 @@ class StatsViewModel: ObservableObject {
         )
     }
     // MARK: - Top Contacts (Client-Side Aggregation + Cache)
-    
+
     private func loadTopContactsWithCache(userId: String) {
         let now = Date()
         let calendar = Calendar.current
-        
-        // 1. Determine Current Week (Sunday to Sunday)
-        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
-        
+
+        // 1. Determine Current Stats Week (Sunday to Sunday) using StatsWeekProvider
+        let (weekStart, weekEnd) = statsWeekProvider.currentWeekRange()
+
         // 2. Check Cache
         if let data = UserDefaults.standard.data(forKey: "top_contacts_cache_\(userId)"),
            let cache = try? JSONDecoder().decode(TopContactsCache.self, from: data) {
-            
+
             let isSameWeek = calendar.isDate(cache.weekStart, inSameDayAs: weekStart)
             let age = now.timeIntervalSince(cache.timestamp)
-            
+
             if isSameWeek && age < 12 * 3600 {
                 print("⚡️ [StatsViewModel] Using Cached Top Contacts (Age: \(Int(age) / 60) min)")
                 self.topContacts = cache.stats
                 return
             }
         }
-        
-        // 3. Fetch & Aggregate
-        Task {
-            await MainActor.run { self.isLoadingTopContacts = true }
-            
-            let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart)!
-            
+
+        // 3. Fetch & Aggregate - Use detached task for heavy computation
+        Task { @MainActor in
+            self.isLoadingTopContacts = true
+        }
+
+        // Move heavy work to background thread
+        Task.detached(priority: .userInitiated) { [weak self, weekStart, weekEnd, userId] in
             do {
-                print("⚡️ [StatsViewModel] Fetching Debriefs for Top Contacts calculation...")
-                // Use fetchDebriefs logic (which queries 'debriefs' collection)
-                let debriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: weekStart, end: weekEnd)
-                
-                // Aggregate: Group by contactId
+                print("⚡️ [StatsViewModel] Fetching Debriefs for Top Contacts (background)...")
+
+                // Fetch only required fields using select() for smaller payload
+                let debriefs = try await FirestoreService.shared.fetchDebriefs(
+                    userId: userId,
+                    start: weekStart,
+                    end: weekEnd
+                )
+
+                // Aggregate on background thread
                 var agg: [String: (count: Int, duration: Int)] = [:]
-                
                 for d in debriefs {
                     let cid = d.contactId
                     if cid.isEmpty { continue }
                     let curr = agg[cid] ?? (0, 0)
                     agg[cid] = (curr.count + 1, curr.duration + Int(d.duration))
                 }
-                
-                // Sort by Count Descending
+
+                // Sort by Count Descending - only top 5
                 let sorted = agg.sorted { $0.value.count > $1.value.count }.prefix(5)
-                
-                // Resolve Names & Map
-                var resolved: [TopContactStat] = []
-                for (cid, metrics) in sorted {
-                    let name = await ContactStoreService.shared.getContactName(for: cid) ?? "Unknown Contact"
-                    resolved.append(TopContactStat(
-                        id: cid,
-                        name: name,
-                        company: "External",
-                        debriefs: metrics.count,
-                        minutes: metrics.duration / 60,
-                        percentage: 0 // Placeholder
-                    ))
+
+                // Resolve names in parallel for speed
+                let resolvedStats = await withTaskGroup(of: TopContactStat?.self) { group in
+                    for (cid, metrics) in sorted {
+                        group.addTask {
+                            let name = await ContactStoreService.shared.getContactName(for: cid) ?? "Unknown Contact"
+                            return TopContactStat(
+                                id: cid,
+                                name: name,
+                                company: "External",
+                                debriefs: metrics.count,
+                                minutes: metrics.duration / 60,
+                                percentage: 0
+                            )
+                        }
+                    }
+
+                    var results: [TopContactStat] = []
+                    for await stat in group {
+                        if let s = stat { results.append(s) }
+                    }
+                    // Re-sort since TaskGroup doesn't preserve order
+                    return results.sorted { $0.debriefs > $1.debriefs }
                 }
-                
-                // Update UI & Cache
-                await MainActor.run {
-                    self.topContacts = resolved
-                    self.isLoadingTopContacts = false
-                    
+
+                // Update UI on main thread
+                await MainActor.run { [weak self] in
+                    self?.topContacts = resolvedStats
+                    self?.isLoadingTopContacts = false
+
                     // Save Cache
-                    let cache = TopContactsCache(timestamp: Date(), weekStart: weekStart, stats: resolved)
+                    let cache = TopContactsCache(timestamp: Date(), weekStart: weekStart, stats: resolvedStats)
                     if let encoded = try? JSONEncoder().encode(cache) {
                         UserDefaults.standard.set(encoded, forKey: "top_contacts_cache_\(userId)")
                     }
                 }
-                
+
             } catch {
                 print("❌ [StatsViewModel] Failed to calculate Top Contacts: \(error)")
-                await MainActor.run { self.isLoadingTopContacts = false }
+                await MainActor.run { [weak self] in
+                    self?.isLoadingTopContacts = false
+                }
             }
         }
     }
     
     private func loadWidgetData() async {
         do {
-            let (thisWeekStart, thisWeekEnd) = weekBounds(for: Date())
-            let prevWeekStart = Calendar.current.date(byAdding: .day, value: -7, to: thisWeekStart)!
-            let prevWeekEnd = Calendar.current.date(byAdding: .day, value: -7, to: thisWeekEnd)!
+            // Use Stats Week (Sunday-Sunday) for consistent week bounds
+            let (thisWeekStart, thisWeekEnd) = statsWeekProvider.currentWeekRange()
+            let (prevWeekStart, prevWeekEnd) = previousWeekBounds(for: Date())
             
             // We need USER ID to fetch data
             // Assuming we can get it from AuthSession or injected. 
@@ -252,17 +281,18 @@ class StatsViewModel: ObservableObject {
                  print("⚠️ [StatsViewModel] No User ID found in session")
                  return
             }
-            
-            // Calculate Start of Week (Sunday)
-            var calendar = Calendar.current
-            calendar.firstWeekday = 1 // 1 = Sunday
+
+            // Use Stats Week (Sunday-Sunday) for consistent week bounds
+            let (startOfWeek, endOfWeek) = statsWeekProvider.currentWeekRange()
             let now = Date()
-            let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
-            
+            let fetchEnd = min(now, endOfWeek) // Don't fetch future data
+
+            print("📅 [StatsViewModel] Stats Week: \(startOfWeek) to \(endOfWeek)")
+
             // Fetch only necessary range
             // NOTE: 'Streak' calculation is now limited to the fetched range (Current Week).
             // For all-time streak, we should rely on a persisted user stat in future iterations.
-            let weeklyDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: startOfWeek, end: now)
+            let weeklyDebriefs = try await FirestoreService.shared.fetchDebriefs(userId: userId, start: startOfWeek, end: fetchEnd)
             print("✅ [StatsViewModel] Fetched \(weeklyDebriefs.count) debriefs for weekly overview")
 
             // Calculate stats from the limited set (Running on Main Actor is fine for < 100 items)
@@ -386,15 +416,24 @@ class StatsViewModel: ObservableObject {
     }
     
     // MARK: - Helpers
-    
+
+    /// Stats Week Provider for consistent Sunday-Sunday week bounds
+    private let statsWeekProvider = StatsWeekProvider()
+
+    /// Returns Sunday-Sunday week bounds (Stats Week - calendar based)
     private func weekBounds(for date: Date) -> (start: Date, end: Date) {
-        let cal = Calendar(identifier: .iso8601)
-        let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-        guard let monday = cal.date(from: components),
-              let nextMonday = cal.date(byAdding: .day, value: 7, to: monday) else {
+        return statsWeekProvider.currentWeekRange()
+    }
+
+    /// Returns previous week bounds (Sunday-Sunday)
+    private func previousWeekBounds(for date: Date) -> (start: Date, end: Date) {
+        let current = statsWeekProvider.currentWeekRange()
+        let calendar = Calendar.current
+        guard let prevStart = calendar.date(byAdding: .day, value: -7, to: current.start),
+              let prevEnd = calendar.date(byAdding: .day, value: -7, to: current.end) else {
             return (Date(), Date())
         }
-        return (monday, nextMonday)
+        return (prevStart, prevEnd)
     }
     
     private func calculateTrend(current: Double, previous: Double) -> String? {
@@ -412,17 +451,48 @@ class StatsViewModel: ObservableObject {
     
     // Computed Properties for Quota Percentages
     var recordingsQuotaPercent: Double {
-        guard quota.recordingsLimit > 0 else { return 0 }
+        guard quota.recordingsLimit > 0, quota.recordingsLimit != Int.max else { return 0 }
         return Double(quota.recordingsThisMonth) / Double(quota.recordingsLimit)
     }
-    
+
     var minutesQuotaPercent: Double {
-        guard quota.minutesLimit > 0 else { return 0 }
+        guard quota.minutesLimit > 0, quota.minutesLimit != Int.max else { return 0 }
         return Double(quota.minutesThisMonth) / Double(quota.minutesLimit)
     }
-    
+
     var storageQuotaPercent: Double {
-        guard quota.storageLimitMB > 0 else { return 0 }
+        guard quota.storageLimitMB > 0, quota.storageLimitMB != Int.max else { return 0 }
         return Double(quota.storageUsedMB) / Double(quota.storageLimitMB)
+    }
+
+    // MARK: - Billing Week Properties
+
+    /// Current user plan for billing week info
+    @Published var userPlan: UserPlan?
+
+    /// Days remaining until billing week resets
+    var billingDaysRemaining: Int {
+        guard let plan = userPlan else { return 7 }
+        let now = Date()
+        let end = plan.billingWeekEndDate
+        return max(0, Calendar.current.dateComponents([.day], from: now, to: end).day ?? 0)
+    }
+
+    /// Billing week date range string (e.g., "Jan 15 - Jan 22")
+    var billingWeekRangeString: String {
+        guard let plan = userPlan else { return "-" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        let start = formatter.string(from: plan.billingWeekStartDate)
+        let end = formatter.string(from: plan.billingWeekEndDate)
+        return "\(start) - \(end)"
+    }
+
+    /// Stats week date range string (e.g., "Sun Jan 14 - Sat Jan 20")
+    var statsWeekRangeString: String {
+        let (start, end) = statsWeekProvider.currentWeekRange()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE MMM d"
+        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
 }

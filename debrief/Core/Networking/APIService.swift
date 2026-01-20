@@ -14,6 +14,46 @@ enum APIError: Error {
     case invalidResponse
     case serverError(Int)
     case decodingError(Error)
+    case quotaExceeded(reason: QuotaExceededReason)
+    case validationError(message: String)
+}
+
+enum QuotaExceededReason: String, Codable {
+    case weeklyDebriefLimit = "WEEKLY_DEBRIEF_LIMIT"
+    case weeklyMinutesLimit = "WEEKLY_MINUTES_LIMIT"
+    case storageLimit = "STORAGE_LIMIT"
+    case durationTooLong = "DURATION_TOO_LONG"
+    case fileTooLarge = "FILE_TOO_LARGE"
+    case unknown = "UNKNOWN"
+
+    var userMessage: String {
+        switch self {
+        case .weeklyDebriefLimit:
+            return "Weekly debrief limit reached. Upgrade your plan or wait until your billing week resets."
+        case .weeklyMinutesLimit:
+            return "Weekly recording time limit reached. Upgrade your plan for more minutes."
+        case .storageLimit:
+            return "Storage limit reached. Delete old debriefs or upgrade your plan."
+        case .durationTooLong:
+            return "Recording is too long. Maximum duration is 10 minutes."
+        case .fileTooLarge:
+            return "Audio file is too large. Maximum size is 100MB."
+        case .unknown:
+            return "Unable to create debrief. Please try again later."
+        }
+    }
+}
+
+/// Backend error response structure
+struct APIErrorResponse: Decodable {
+    let error: APIErrorDetail?
+    let code: String?
+    let message: String?
+}
+
+struct APIErrorDetail: Decodable {
+    let code: String
+    let message: String
 }
 
 class APIService {
@@ -373,15 +413,36 @@ class APIService {
         request.httpBody = data
         
         let (responseData, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, [201, 202].contains(httpResponse.statusCode) else {
-            throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
         }
-        
+
+        // Handle error responses
+        if ![201, 202].contains(httpResponse.statusCode) {
+            // Try to parse error response
+            if let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: responseData) {
+                let errorCode = errorResponse.error?.code ?? errorResponse.code ?? ""
+
+                switch errorCode {
+                case "QUOTA_EXCEEDED":
+                    let reason = QuotaExceededReason(rawValue: errorResponse.error?.message ?? "") ?? .unknown
+                    throw APIError.quotaExceeded(reason: reason)
+                case "VALIDATION_ERROR":
+                    throw APIError.validationError(message: errorResponse.error?.message ?? "Invalid request")
+                case "FILE_TOO_LARGE":
+                    throw APIError.quotaExceeded(reason: .fileTooLarge)
+                default:
+                    throw APIError.serverError(httpResponse.statusCode)
+                }
+            }
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
+
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)
         return mapResponseToDomain(resp)
     }
@@ -439,26 +500,48 @@ class APIService {
     }
     
     // MARK: - Stats
-    
+
     func getStatsOverview() async throws -> OverviewResponse {
         return try await performRequest(endpoint: "/stats/overview", method: "GET")
     }
+
+    // MARK: - Stats Read Strategy
+    //
+    // READ OPERATIONS: Use Firestore snapshots/listeners directly (no backend API calls)
+    // - user_plans collection → FirestoreService.observeUserPlan() for billing/quota
+    // - debriefs collection → FirestoreService.getWeeklyStats() for stats aggregation
+    //
+    // This approach:
+    // 1. Reduces backend load
+    // 2. Enables real-time updates via Firestore listeners
+    // 3. Leverages Firebase's built-in caching
+    //
+    // WRITE OPERATIONS: Use backend API
+    // - POST /v1/debriefs → Creates debrief, backend handles quota check & usage increment
+    // - DELETE /v1/debriefs/{id} → Backend handles storage refund
+    //
     
     // MARK: - Management
     
     func deleteDebrief(id: String) async throws {
         // According to REST standards, DELETE should return 204 No Content usually.
         // We use performRequest but expect Void/Empty response.
-        
+
         guard let url = URL(string: "\(baseURL)/debriefs/\(id)") else {
             throw APIError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        
+
+        // CRITICAL: Add Authorization header
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
         let (_, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500)
         }

@@ -115,7 +115,7 @@ struct StatsOverviewView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1), lineWidth: 1))
 
-            // MARK: - Quota Usage
+            // MARK: - Quota Usage (Billing Week - User Specific)
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Image(systemName: "bolt.fill")
@@ -123,31 +123,60 @@ struct StatsOverviewView: View {
                     Text("Quota Usage")
                         .font(.headline)
                         .foregroundStyle(.white)
+
+                    Spacer()
+
+                    // Billing week info tooltip
+                    Button(action: {}) {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .help("Billing week is a rolling 7-day period from your first debrief. Resets automatically.")
                 }
-                
+
+                // Billing week period indicator
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                    Text("Billing Week")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                    Spacer()
+                    Text("Resets in \(viewModel.billingDaysRemaining) days")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
                 VStack(spacing: 16) {
                     QuotaRow(
                         title: "Recordings",
                         current: viewModel.quota.recordingsThisMonth,
                         limit: viewModel.quota.recordingsLimit,
                         percent: viewModel.recordingsQuotaPercent,
-                        subLabel: "this week"
+                        subLabel: "this billing week"
                     )
-                    
+
                     QuotaRow(
                         title: "Minutes",
                         current: viewModel.quota.minutesThisMonth,
                         limit: viewModel.quota.minutesLimit,
                         percent: viewModel.minutesQuotaPercent,
-                        subLabel: "min this week"
+                        subLabel: "min this billing week"
                     )
-                    
+
                     QuotaRow(
                         title: "Storage",
                         current: viewModel.quota.storageUsedMB,
                         limit: viewModel.quota.storageLimitMB,
                         percent: viewModel.storageQuotaPercent,
-                        unit: "MB"
+                        unit: "MB",
+                        subLabel: "lifetime"
                     )
                 }
             }
@@ -205,7 +234,7 @@ struct StatsOverviewView: View {
                                             .frame(width: 32, height: 32)
                                         Text("#\(index + 1)")
                                             .font(.caption.bold())
-                                            .foregroundStyle(.teal)
+                                            .foregroundStyle(.white)
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 2) {

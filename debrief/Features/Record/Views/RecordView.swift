@@ -34,6 +34,8 @@ struct RecordView: View {
                 case .processing, .complete:
                     // Should dismiss immediately, but show minimal loader just in case
                     ProgressView()
+                case .quotaExceeded(let reason):
+                    quotaExceededView(reason: reason)
                 }
             }
         }
@@ -224,5 +226,59 @@ struct RecordView: View {
         let min = seconds / 60
         let sec = seconds % 60
         return String(format: "%d:%02d", min, sec)
+    }
+
+    // MARK: - Quota Exceeded View
+
+    func quotaExceededView(reason: QuotaExceededReason) -> some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.orange)
+
+            Text("Limit Reached")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+
+            Text(reason.userMessage)
+                .font(.body)
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Spacer()
+
+            VStack(spacing: 12) {
+                Button {
+                    // TODO: Navigate to upgrade screen
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.up.circle.fill")
+                        Text("Upgrade Plan")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.Colors.primaryButton)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Close")
+                        .font(.headline)
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding()
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 32)
+        }
     }
 }

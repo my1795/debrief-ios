@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseFirestore
 
 // MARK: - Domain Models
 
@@ -202,4 +203,127 @@ extension TopContactStat {
         TopContactStat(id: "2", name: "Jane Smith", company: "Tech Inc", debriefs: 18, minutes: 98, percentage: 25),
         TopContactStat(id: "3", name: "Bob Wilson", company: "StartupXYZ", debriefs: 15, minutes: 87, percentage: 20)
     ]
+}
+
+// MARK: - NEW v2 Billing System
+//
+// READ STRATEGY: Use Firestore snapshots directly (no backend API calls for reads)
+// - user_plans collection → Billing/quota info via FirestoreService.observeUserPlan()
+// - debriefs collection → Stats aggregation via FirestoreService.getWeeklyStats()
+//
+// This reduces backend load and enables real-time updates via Firestore listeners.
+
+// MARK: - Firestore Document Model (user_plans collection)
+
+struct UserPlan: Codable {
+    @DocumentID var planId: String? // Document ID (same as userId)
+    let userId: String
+    let tier: String               // FREE, PERSONAL, PRO
+    let billingWeekStart: Int64
+    let billingWeekEnd: Int64
+    let weeklyUsage: UserPlanWeeklyUsage
+    let usedStorageMB: Int
+    let subscriptionEnd: Int64?
+    let createdAt: Int64
+    let updatedAt: Int64
+}
+
+struct UserPlanWeeklyUsage: Codable {
+    let debriefCount: Int
+    let totalSeconds: Int
+}
+
+extension UserPlan {
+    var billingWeekStartDate: Date {
+        Date(timeIntervalSince1970: TimeInterval(billingWeekStart) / 1000)
+    }
+
+    var billingWeekEndDate: Date {
+        Date(timeIntervalSince1970: TimeInterval(billingWeekEnd) / 1000)
+    }
+
+    var usedMinutes: Int {
+        Int(ceil(Double(weeklyUsage.totalSeconds) / 60.0))
+    }
+
+    // Tier-based limits (matching BillingConstants.kt)
+    var weeklyDebriefLimit: Int {
+        switch tier.uppercased() {
+        case "FREE": return 50
+        case "PERSONAL", "PRO": return Int.max
+        default: return 50
+        }
+    }
+
+    var weeklyMinutesLimit: Int {
+        switch tier.uppercased() {
+        case "FREE": return 30
+        case "PERSONAL": return 150
+        case "PRO": return Int.max
+        default: return 30
+        }
+    }
+
+    var storageLimitMB: Int {
+        switch tier.uppercased() {
+        case "FREE": return 500
+        case "PERSONAL", "PRO": return Int.max
+        default: return 500
+        }
+    }
+
+    var isUnlimitedDebriefs: Bool { weeklyDebriefLimit == Int.max }
+    var isUnlimitedMinutes: Bool { weeklyMinutesLimit == Int.max }
+    var isUnlimitedStorage: Bool { storageLimitMB == Int.max }
+
+    /// Convert to legacy UserQuota for backward compatibility
+    func toUserQuota() -> UserQuota {
+        UserQuota(
+            userId: userId,
+            subscriptionTier: tier,
+            weeklyDebriefs: weeklyDebriefLimit,
+            weeklyRecordingMinutes: weeklyMinutesLimit,
+            storageLimitMB: storageLimitMB,
+            usedDebriefs: weeklyUsage.debriefCount,
+            usedRecordingSeconds: weeklyUsage.totalSeconds,
+            usedStorageMB: usedStorageMB,
+            currentPeriodStart: billingWeekStart,
+            currentPeriodEnd: billingWeekEnd
+        )
+    }
+}
+
+// MARK: - Billing Constants (matching backend BillingConstants.kt)
+
+enum BillingConstants {
+    static let maxDebriefDurationSeconds = 600  // 10 minutes
+    static let maxAudioFileSizeMB = 100
+
+    enum Tier {
+        case free
+        case personal
+        case pro
+
+        var weeklyDebriefLimit: Int {
+            switch self {
+            case .free: return 50
+            case .personal, .pro: return Int.max
+            }
+        }
+
+        var weeklyMinutesLimit: Int {
+            switch self {
+            case .free: return 30
+            case .personal: return 150
+            case .pro: return Int.max
+            }
+        }
+
+        var storageLimitMB: Int {
+            switch self {
+            case .free: return 500
+            case .personal, .pro: return Int.max
+            }
+        }
+    }
 }
