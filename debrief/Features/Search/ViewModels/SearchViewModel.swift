@@ -45,7 +45,7 @@ class SearchViewModel: ObservableObject {
         }
         
         // Minimum length check to avoid low quality queries
-        guard query.count >= 3 else {
+        guard query.count >= AppConfig.shared.minimumSearchQueryLength else {
             if isVerbose {
                 print("🔍 [SearchViewModel] Query too short (\(query.count) chars), skipping")
             }

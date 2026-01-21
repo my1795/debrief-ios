@@ -20,9 +20,6 @@ enum RecordingState {
     case quotaExceeded(reason: QuotaExceededReason)
 }
 
-/// Maximum recording duration in seconds (10 minutes)
-private let maxRecordingDurationSeconds: TimeInterval = 600
-
 @MainActor
 class RecordViewModel: ObservableObject {
     // ... (Existing properties) ...
@@ -189,8 +186,8 @@ class RecordViewModel: ObservableObject {
                     self.recordingTime = currentTime
 
                     // Auto-stop at max duration (600 seconds / 10 minutes)
-                    if currentTime >= maxRecordingDurationSeconds {
-                        print("⏱️ [RecordViewModel] Max duration reached (\(maxRecordingDurationSeconds)s), auto-stopping")
+                    if currentTime >= AppConfig.shared.maxRecordingDurationSeconds {
+                        print("⏱️ [RecordViewModel] Max duration reached (\(AppConfig.shared.maxRecordingDurationSeconds)s), auto-stopping")
                         self.stopRecording()
                     }
                 }
@@ -200,12 +197,12 @@ class RecordViewModel: ObservableObject {
 
     /// Check if recording is approaching the limit (for UI warning)
     var isApproachingLimit: Bool {
-        recordingTime >= (maxRecordingDurationSeconds - 60) // Warning at 9 minutes
+        recordingTime >= (AppConfig.shared.maxRecordingDurationSeconds - 60) // Warning at 9 minutes
     }
 
     /// Remaining recording time in seconds
     var remainingTime: TimeInterval {
-        max(0, maxRecordingDurationSeconds - recordingTime)
+        max(0, AppConfig.shared.maxRecordingDurationSeconds - recordingTime)
     }
     
     // MARK: - Contact Actions
@@ -263,10 +260,10 @@ class RecordViewModel: ObservableObject {
         do {
             let quota = try await FirestoreService.shared.getUserQuota(userId: userId)
             
-            // Logic: Warn if used >= 450 MB (User Requirement)
-            let limitThreshold = 450
+            // Logic: Warn if storage exceeds threshold (User Requirement)
+            let limitThreshold = AppConfig.shared.storageWarningThresholdMB
             let hasWarnedKey = "hasWarnedStorageLimit"
-            
+
             if quota.usedStorageMB >= limitThreshold {
                 if !UserDefaults.standard.bool(forKey: hasWarnedKey) {
                     sendStorageNotification()
@@ -285,7 +282,7 @@ class RecordViewModel: ObservableObject {
     private func sendStorageNotification() {
         let content = UNMutableNotificationContent()
         content.title = "Storage Almost Full"
-        content.body = "You have reached 450MB of storage. Upgrade your plan or free up voice space to continue."
+        content.body = "You have reached \(AppConfig.shared.storageWarningThresholdMB)MB of storage. Upgrade your plan or free up voice space to continue."
         content.sound = .default
         
         let request = UNNotificationRequest(identifier: "storage_warning", content: content, trigger: nil) // Deliver immediately

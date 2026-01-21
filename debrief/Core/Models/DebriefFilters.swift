@@ -35,15 +35,17 @@ struct DebriefFilters: Equatable {
     }
     
     var isActive: Bool {
-        return contactId != nil || dateOption != .all
+        return contactId != nil || dateOption != .all || hasActionItems || status != nil
     }
-    
+
     mutating func clear() {
         contactId = nil
         contactName = nil
+        hasActionItems = false
         dateOption = .all
         customStartDate = Date()
         customEndDate = Date()
+        status = nil
     }
     
     // Use StatsWeekProvider for consistent Sunday-Sunday week bounds

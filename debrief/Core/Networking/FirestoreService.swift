@@ -144,7 +144,7 @@ class FirestoreService {
     func observeDebriefs(
         userId: String,
         filters: DebriefFilters? = nil,
-        limit: Int = 50
+        limit: Int = AppConfig.shared.defaultPaginationLimit
     ) -> AnyPublisher<DebriefSnapshotResult, Error> {
         let subject = PassthroughSubject<DebriefSnapshotResult, Error>()
 

@@ -349,7 +349,7 @@ class StatsViewModel: ObservableObject {
         }
     }
 
-    /// Legacy method - now starts snapshot listener
+    /// Entry point for StatsView - initializes stats observation with auth check
     func loadData() async {
         guard let userId = AuthSession.shared.user?.id else {
             isLoading = false

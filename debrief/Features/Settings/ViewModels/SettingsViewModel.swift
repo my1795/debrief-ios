@@ -193,19 +193,19 @@ class SettingsViewModel: ObservableObject {
     }
     
     func openPrivacyPolicy() {
-        if let url = URL(string: "https://debrief-app.vercel.app/privacy") {
+        if let url = AppConfig.shared.privacyPolicyURL {
             UIApplication.shared.open(url)
         }
     }
 
     func openHelpCenter() {
-        if let url = URL(string: "https://debrief-app.vercel.app/help") {
+        if let url = AppConfig.shared.helpCenterURL {
             UIApplication.shared.open(url)
         }
     }
 
     func openDataHandling() {
-        if let url = URL(string: "https://debrief-app.vercel.app/terms") {
+        if let url = AppConfig.shared.termsOfServiceURL {
             UIApplication.shared.open(url)
         }
     }

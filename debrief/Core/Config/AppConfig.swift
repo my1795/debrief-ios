@@ -75,7 +75,37 @@ struct AppConfig {
     var isVerboseLoggingEnabled: Bool {
         currentEnvironment == .local
     }
-    
+
+    // MARK: - Web URLs
+
+    /// Base URL for web pages (privacy, terms, help)
+    var webBaseURL: String { "https://debrief-app.vercel.app" }
+
+    var privacyPolicyURL: URL? { URL(string: "\(webBaseURL)/privacy") }
+    var termsOfServiceURL: URL? { URL(string: "\(webBaseURL)/terms") }
+    var helpCenterURL: URL? { URL(string: "\(webBaseURL)/help") }
+
+    // MARK: - Recording Limits
+
+    /// Maximum recording duration in seconds (10 minutes)
+    var maxRecordingDurationSeconds: TimeInterval { 600 }
+
+    /// Storage warning threshold in MB (warn at 90% of typical 500MB limit)
+    var storageWarningThresholdMB: Int { 450 }
+
+    // MARK: - Pagination
+
+    /// Default number of items per page
+    var defaultPaginationLimit: Int { 50 }
+
+    /// Batch fetch limit for internal operations
+    var batchFetchLimit: Int { 100 }
+
+    // MARK: - Search
+
+    /// Minimum characters required for search query
+    var minimumSearchQueryLength: Int { 3 }
+
     private init() {
         // Log current environment on init
         print("🌍 [AppConfig] Environment: \(currentEnvironment.displayName)")
