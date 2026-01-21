@@ -128,9 +128,17 @@ struct LoginView: View {
                 VStack(spacing: 4) {
                     Text("By signing in, you agree to our")
                     HStack(spacing: 4) {
-                        Button("Terms of Service") { }
+                        Button("Terms of Service") {
+                            if let url = URL(string: "https://debrief-app.vercel.app/terms") {
+                                UIApplication.shared.open(url)
+                            }
+                        }
                         Text("•")
-                        Button("Privacy Policy") { }
+                        Button("Privacy Policy") {
+                            if let url = URL(string: "https://debrief-app.vercel.app/privacy") {
+                                UIApplication.shared.open(url)
+                            }
+                        }
                     }
                     .foregroundStyle(Color(hex: "5EEAD4")) // teal-300
                 }

@@ -319,13 +319,7 @@ class APIService {
         let createdAt: Date?
         let audioUrl: String?
     }
-    
-    // Deprecated: Uses FirestoreService now
-    // func getDebriefs(contactId: String? = nil) async throws -> [Debrief] { ... }
-    
-    // Deprecated: Uses FirestoreService.getDebrief(userId:debriefId:) now
-    // func getDebrief(id: String) async throws -> Debrief { ... }
-    
+
     // Helper to avoid duplication (still used by createDebrief)
     private func mapResponseToDomain(_ resp: DebriefAPIResponse) -> Debrief {
         let mappedStatus: DebriefStatus = {
@@ -446,11 +440,7 @@ class APIService {
         let resp = try decoder.decode(DebriefAPIResponse.self, from: responseData)
         return mapResponseToDomain(resp)
     }
-    func createDebrief(fileURL: URL, contactId: String?) async throws -> Debrief {
-        // ... implementation hidden
-        fatalError("Should use the existing implementation") 
-    }
-    
+
     // MARK: - Encryption
     
     /// Exchanges Firebase ID token for user's encryption key.

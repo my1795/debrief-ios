@@ -74,16 +74,13 @@ class StatsService: StatsServiceProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Add Auth Token (Assuming simple Bearer if managed, or relying on session cookies/headers handled by APIService)
-        // Since we are using raw URLSession here, we might miss Auth if APIService injects it.
-        // Let's try to get headers from APIService if possible, or assume session handles it.
-        // For now, sticking to raw request as per existing pattern in this file,
-        // BUT assuming headers might be needed.
-        if let token = UserDefaults.standard.string(forKey: "auth_token") {
-             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        // Add Firebase Auth token
+        if let user = Auth.auth().currentUser {
+            let token = try await user.getIDToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
+
         request.httpBody = try JSONEncoder().encode(payload)
         
         let (data, response) = try await session.data(for: request)
