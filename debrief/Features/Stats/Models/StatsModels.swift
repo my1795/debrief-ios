@@ -65,27 +65,7 @@ struct DebriefCountResponse: Codable {
     let count: Int
 }
 
-struct OverviewResponse: Decodable {
-    let allTimeStats: AllTimeStats
-    // Note: API returns top-level object wrapper.
-}
-
-struct AllTimeStats: Decodable {
-    let totalDebriefs: Int
-    let totalMinutes: Int
-    let totalWords: Int
-    let avgMinutesPerDay: Double?
-    let topContact: TopContactInfo?
-}
-
-struct TopContactInfo: Decodable {
-    let contactId: String? // Nullable in schema?
-    let name: String?
-    let debriefCount: Int
-    let totalMinutes: Int
-}
-
-// MARK: - Domain Models (Mapped from API)
+// MARK: - Domain Models
 
 struct StatsOverview {
     let totalDebriefs: Int
