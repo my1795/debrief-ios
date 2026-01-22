@@ -26,15 +26,15 @@ class NotificationService {
     /// Set notification preference
     func setNotificationsEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: notificationsEnabledKey)
-        print("🔔 [NotificationService] Notifications \(enabled ? "enabled" : "disabled")")
+        Logger.info("Notifications \(enabled ? "enabled" : "disabled")")
     }
 
     func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("🔔 [NotificationService] Permission granted")
+                Logger.info("Notification permission granted")
             } else if let error = error {
-                print("❌ [NotificationService] Permission denied: \(error)")
+                Logger.error("Notification permission denied: \(error)")
             }
         }
     }
@@ -42,7 +42,7 @@ class NotificationService {
     func scheduleDebriefPrompt() {
         // Check user preference first
         guard isNotificationsEnabled else {
-            print("🔕 [NotificationService] Notifications disabled by user, skipping")
+            Logger.info("Notifications disabled by user, skipping")
             return
         }
 
@@ -58,9 +58,9 @@ class NotificationService {
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ [NotificationService] Failed to schedule: \(error)")
+                Logger.error("Failed to schedule notification: \(error)")
             } else {
-                print("🔔 [NotificationService] Prompt scheduled")
+                Logger.info("Notification prompt scheduled")
             }
         }
     }

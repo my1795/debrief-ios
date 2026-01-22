@@ -50,7 +50,7 @@ class HomeViewModel: ObservableObject {
             .sink { [weak self] notification in
                 guard let self = self, let id = notification.userInfo?["debriefId"] as? String else { return }
                 
-                print("🗑 [HomeViewModel] Removing deleted debrief: \(id)")
+                Logger.info("Removing deleted debrief: \(id)")
                 
                 // Remove from lists
                 self.debriefs.removeAll { $0.id == id }
@@ -79,7 +79,7 @@ class HomeViewModel: ObservableObject {
             // Load efficient stats independently
             await loadRealtimeStats(userId: userId)
         } catch {
-            print("Failed to fetch debriefs: \(error)")
+            Logger.error("Failed to fetch debriefs: \(error)")
             self.error = AppError.from(error)
         }
     }
@@ -119,7 +119,7 @@ class HomeViewModel: ObservableObject {
                 todayMins: durationMins
             )
         } catch {
-            print("❌ [HomeViewModel] Failed to load daily stats: \(error)")
+            Logger.error("Failed to load daily stats: \(error)")
             // Stats errors are less critical, don't show banner for stats alone
         }
     }

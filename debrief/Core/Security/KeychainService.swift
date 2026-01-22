@@ -38,11 +38,11 @@ final class KeychainService {
         let status = SecItemAdd(query as CFDictionary, nil)
         
         guard status == errSecSuccess else {
-            print("❌ [KeychainService] Failed to save key: \(status)")
+            Logger.error("Failed to save key: \(status)")
             throw KeychainError.saveFailed(status)
         }
         
-        print("✅ [KeychainService] Key saved for account: \(account)")
+        Logger.success("Key saved for account: \(account)")
     }
     
     /// Loads a key from the Keychain.
@@ -62,7 +62,7 @@ final class KeychainService {
         
         guard status == errSecSuccess else {
             if status != errSecItemNotFound {
-                print("⚠️ [KeychainService] Load failed: \(status)")
+                Logger.warning("Load failed: \(status)")
             }
             return nil
         }
@@ -82,11 +82,11 @@ final class KeychainService {
         let status = SecItemDelete(query as CFDictionary)
         
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            print("❌ [KeychainService] Failed to delete key: \(status)")
+            Logger.error("Failed to delete key: \(status)")
             throw KeychainError.deleteFailed(status)
         }
         
-        print("🗑 [KeychainService] Key deleted for account: \(account)")
+        Logger.info("Key deleted for account: \(account)")
     }
     
     /// Clears all keys stored by this service.
@@ -102,7 +102,7 @@ final class KeychainService {
             throw KeychainError.deleteFailed(status)
         }
         
-        print("🗑 [KeychainService] All keys cleared")
+        Logger.info("All keys cleared")
     }
 }
 

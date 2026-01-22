@@ -40,7 +40,7 @@ class ContactsViewModel: ObservableObject {
             self.allContacts = fetchedContacts
             self.filterContacts()
         } catch {
-            print("ERROR Loading Contacts: \(error)")
+            Logger.error("Loading Contacts: \(error)")
             self.error = AppError.from(error)
         }
         

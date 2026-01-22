@@ -15,11 +15,11 @@ class FirebaseAuthService: AuthServiceProtocol {
     
     @MainActor
     func signInWithGoogle() async throws -> AuthUser {
-        print("🔐 [FirebaseAuthService] Starting Google Sign-In...")
+        Logger.auth("Starting Google Sign-In...")
         
         // 1. Get client ID
         guard let clientID = FirebaseApp.app()?.options.clientID else {
-            print("❌ [FirebaseAuthService] Missing Client ID")
+            Logger.error("Missing Client ID")
             throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing Client ID"])
         }
         
@@ -31,16 +31,16 @@ class FirebaseAuthService: AuthServiceProtocol {
         // Find root view controller
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else {
-            print("❌ [FirebaseAuthService] No Root View Controller")
+            Logger.error("No Root View Controller")
             throw NSError(domain: "AuthError", code: -2, userInfo: [NSLocalizedDescriptionKey: "No Root UI"])
         }
         
-        print("🔐 [FirebaseAuthService] Presenting Google UI...")
+        Logger.auth("Presenting Google UI...")
         let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
         
         // 4. Get credentials
         guard let idToken = result.user.idToken?.tokenString else {
-            print("❌ [FirebaseAuthService] Missing ID Token")
+            Logger.error("Missing ID Token")
             throw NSError(domain: "AuthError", code: -3, userInfo: [NSLocalizedDescriptionKey: "Missing ID Token"])
         }
         let accessToken = result.user.accessToken.tokenString
@@ -49,15 +49,15 @@ class FirebaseAuthService: AuthServiceProtocol {
                                                        accessToken: accessToken)
         
         // 5. Sign in to Firebase
-        print("🔐 [FirebaseAuthService] Signing in to Firebase...")
+        Logger.auth("Signing in to Firebase...")
         let authResult = try await Auth.auth().signIn(with: credential)
-        print("✅ [FirebaseAuthService] Success! User ID: \(authResult.user.uid)")
+        Logger.success("Success! User ID: \(authResult.user.uid)")
         
         return mapUser(authResult.user)
     }
     
     func signOut() throws {
-        print("👋 [FirebaseAuthService] Signing out...")
+        Logger.info("Signing out...")
         try Auth.auth().signOut()
     }
     
@@ -66,7 +66,7 @@ class FirebaseAuthService: AuthServiceProtocol {
     func listenToAuthState(onChange: @escaping (AuthUser?) -> Void) -> AnyObject {
         let handle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self = self else { return }
-            print("👀 [FirebaseAuthService] Auth State Changed: \(user?.uid ?? "nil")")
+            Logger.auth("Auth State Changed: \(user?.uid ?? "nil")")
             let mapped = user.map { self.mapUser($0) }
             onChange(mapped)
         }

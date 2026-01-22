@@ -55,7 +55,7 @@ class StatsService: StatsServiceProtocol {
         
         guard !pending.isEmpty else { return 0 }
         
-        print("🔄 [StatsService] Syncing \(pending.count) calls...")
+        Logger.sync("Syncing \(pending.count) calls...")
         
         let items = pending.map { record in
             CallSyncItem(
@@ -93,7 +93,7 @@ class StatsService: StatsServiceProtocol {
         
         // Success -> Clear Storage
         storage.clearCalls(pending)
-        print("✅ [StatsService] Synced \(result.syncedCount) calls.")
+        Logger.success("Synced \(result.syncedCount) calls.")
         
         return result.syncedCount
     }

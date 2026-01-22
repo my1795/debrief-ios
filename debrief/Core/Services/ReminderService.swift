@@ -27,7 +27,7 @@ final class ReminderService {
                 return try await eventStore.requestAccess(to: .reminder)
             }
         } catch {
-            print("❌ [ReminderService] Failed to request access: \(error)")
+            Logger.error("Failed to request access: \(error)")
             return false
         }
     }
@@ -59,7 +59,7 @@ final class ReminderService {
         if !isAuthorized {
             let granted = await requestAccess()
             if !granted {
-                print("⚠️ [ReminderService] Access not granted")
+                Logger.warning("Reminder access not granted")
                 return false
             }
         }
@@ -84,10 +84,10 @@ final class ReminderService {
         
         do {
             try eventStore.save(reminder, commit: true)
-            print("✅ [ReminderService] Created reminder: \(title)")
+            Logger.success("Created reminder: \(title)")
             return true
         } catch {
-            print("❌ [ReminderService] Failed to save reminder: \(error)")
+            Logger.error("Failed to save reminder: \(error)")
             return false
         }
     }
@@ -112,7 +112,7 @@ final class ReminderService {
             if success { successCount += 1 }
         }
         
-        print("✅ [ReminderService] Created \(successCount)/\(items.count) reminders")
+        Logger.success("Created \(successCount)/\(items.count) reminders")
         return successCount
     }
 }

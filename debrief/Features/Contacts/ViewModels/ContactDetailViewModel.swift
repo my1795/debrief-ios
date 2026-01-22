@@ -159,9 +159,9 @@ class ContactDetailViewModel: ObservableObject {
             
         } catch is CancellationError {
             // Task was cancelled, ignore silently
-            print("📛 [ContactDetailViewModel] Task cancelled")
+            Logger.debug("Task cancelled")
         } catch {
-            print("Error fetch: \(error)")
+            Logger.error("Fetch error: \(error)")
             self.error = AppError.from(error)
         }
         
@@ -226,7 +226,7 @@ class ContactDetailViewModel: ObservableObject {
             }
             
         } catch {
-            print("❌ [ContactDetailViewModel] Stats Error: \(error)")
+            Logger.error("Stats Error: \(error)")
             self.error = AppError.from(error)
         }
     }

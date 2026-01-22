@@ -21,11 +21,11 @@ struct debriefApp: App {
         if let path = Bundle.main.path(forResource: configFileName, ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
-            print("🔥 [Firebase] Configured with: \(configFileName).plist")
+            Logger.info("Firebase configured with: \(configFileName).plist")
         } else {
             // Fallback to default GoogleService-Info.plist
             FirebaseApp.configure()
-            print("🔥 [Firebase] Configured with default GoogleService-Info.plist")
+            Logger.info("Firebase configured with default GoogleService-Info.plist")
         }
     }
 

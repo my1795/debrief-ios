@@ -33,7 +33,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("❌ [AudioPlayback] Failed to setup audio session: \(error)")
+            Logger.error("Failed to setup audio session: \(error)")
         }
     }
     
@@ -59,7 +59,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
                     self?.isPlaying = true
                 } else if item.status == .failed {
                     self?.isLoading = false
-                    print("❌ [AudioPlayback] AVPlayer failed: \(item.error?.localizedDescription ?? "Unknown")")
+                    Logger.error("AVPlayer failed: \(item.error?.localizedDescription ?? "Unknown")")
                 }
             }
         }
@@ -92,14 +92,14 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         do {
             // 1. Download info
-            print("🎵 [AudioPlayback] Downloading encrypted audio...")
+            Logger.info("Downloading encrypted audio...")
             let (encryptedData, _) = try await URLSession.shared.data(from: remoteURL)
-            print("🎵 [AudioPlayback] Downloaded \(encryptedData.count) bytes")
-            
+            Logger.info("Downloaded \(encryptedData.count) bytes")
+
             // 2. Decrypt (Memory)
-            print("🎵 [AudioPlayback] Decrypting...")
+            Logger.info("Decrypting...")
             let decryptedData = try EncryptionService.shared.decryptAudioData(encryptedData, using: key)
-            print("🎵 [AudioPlayback] Decrypted \(decryptedData.count) bytes. Initializing player...")
+            Logger.info("Decrypted \(decryptedData.count) bytes. Initializing player...")
             
             // Cache for toggle
             self.cachedDecryptedData = decryptedData
@@ -108,7 +108,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
             try playDecryptedData(decryptedData)
             
         } catch {
-            print("❌ [AudioPlayback] Encrypted playback failed: \(error)")
+            Logger.error("Encrypted playback failed: \(error)")
             decryptionError = error
             isLoading = false
         }
@@ -222,7 +222,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
         audioPlayer?.rate = playbackRate  // Apply current rate
         duration = audioPlayer?.duration ?? 0
         
-        print("🎵 [AudioPlayback] AVAudioPlayer ready. Duration: \(duration)")
+        Logger.info("AVAudioPlayer ready. Duration: \(duration)")
         
         audioPlayer?.play()
         isPlaying = true
@@ -264,7 +264,7 @@ class AudioPlaybackService: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        print("❌ [AudioPlayback] AVAudioPlayer decode error: \(error?.localizedDescription ?? "nil")")
+        Logger.error("AVAudioPlayer decode error: \(error?.localizedDescription ?? "nil")")
         Task { @MainActor in
             self.isLoading = false
             self.isPlaying = false

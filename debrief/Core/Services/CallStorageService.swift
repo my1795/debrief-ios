@@ -28,9 +28,9 @@ class CallStorageService: CallStorageServiceProtocol {
         do {
             let data = try JSONEncoder().encode(current)
             defaults.set(data, forKey: key)
-            print("💾 [CallStorage] Saved call stat. Queue size: \(current.count)")
+            Logger.data("Saved call stat. Queue size: \(current.count)")
         } catch {
-            print("❌ [CallStorage] Failed to save call stat: \(error)")
+            Logger.error("Failed to save call stat: \(error)")
         }
     }
     
@@ -39,7 +39,7 @@ class CallStorageService: CallStorageServiceProtocol {
         do {
             return try JSONDecoder().decode([CallStat].self, from: data)
         } catch {
-            print("❌ [CallStorage] Failed to decode call stats: \(error)")
+            Logger.error("Failed to decode call stats: \(error)")
             return []
         }
     }
@@ -53,9 +53,9 @@ class CallStorageService: CallStorageServiceProtocol {
         do {
             let data = try JSONEncoder().encode(current)
             defaults.set(data, forKey: key)
-            print("🧹 [CallStorage] Cleared \(callsToClear.count) call stats. Remaining: \(current.count)")
+            Logger.info("Cleared \(callsToClear.count) call stats. Remaining: \(current.count)")
         } catch {
-            print("❌ [CallStorage] Failed to clear call stats: \(error)")
+            Logger.error("Failed to clear call stats: \(error)")
         }
     }
     

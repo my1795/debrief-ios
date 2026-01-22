@@ -40,7 +40,7 @@ class DebriefUploadManager: ObservableObject {
         
         Task { @MainActor in
             if let index = pendingDebriefs.firstIndex(where: { $0.id == id }) {
-                print("🗑 [UploadManager] Removed pending/failed debrief: \(id)")
+                Logger.info("Removed pending/failed debrief: \(id)")
                 pendingDebriefs.remove(at: index)
             }
         }
@@ -67,7 +67,7 @@ class DebriefUploadManager: ObservableObject {
             audioUrl: nil
         )
         
-        print("🚀 [UploadManager] Optimistic Add: \(tempId)")
+        Logger.sync("Optimistic Add: \(tempId)")
         
         // 2. Add to Pending List
         pendingDebriefs.insert(optimisticDebrief, at: 0)
@@ -86,7 +86,7 @@ class DebriefUploadManager: ObservableObject {
                     duration: duration
                 )
                 
-                print("✅ [UploadManager] Success: \(serverDebrief.id)")
+                Logger.success("Upload success: \(serverDebrief.id)")
                 
                 await MainActor.run {
                     self.handleUploadSuccess(tempId: tempId, serverDebrief: serverDebrief)
@@ -96,7 +96,7 @@ class DebriefUploadManager: ObservableObject {
                 // For now, audioRecorder cleanup handles temp files.
                 
             } catch {
-                print("❌ [UploadManager] Failed: \(error)")
+                Logger.error("Upload failed: \(error)")
                 await MainActor.run {
                     self.handleUploadFailure(tempId: tempId, error: error)
                 }
@@ -118,7 +118,7 @@ class DebriefUploadManager: ObservableObject {
     private func handleUploadFailure(tempId: String, error: Error) {
         // Check if this is a quota exceeded error
         if case APIError.quotaExceeded(let reason) = error {
-            print("⚠️ [UploadManager] Quota exceeded: \(reason.rawValue)")
+            Logger.warning("Quota exceeded: \(reason.rawValue)")
 
             // Remove the optimistic debrief from pending list
             if let index = pendingDebriefs.firstIndex(where: { $0.id == tempId }) {
@@ -188,7 +188,7 @@ class DebriefUploadManager: ObservableObject {
                 self.updatePendingDebrief(updatedDebrief)
                 
                 if updatedDebrief.status == .ready {
-                    print("✨ [UploadManager] Debrief Ready: \(debriefId)")
+                    Logger.success("Debrief Ready: \(debriefId)")
                     self.listeners[debriefId]?.remove()
                     self.listeners[debriefId] = nil
                     
@@ -197,7 +197,7 @@ class DebriefUploadManager: ObservableObject {
                 }
                 
             case .failure(let error):
-                print("⚠️ [UploadManager] Listener Error: \(error)")
+                Logger.warning("Listener Error: \(error)")
             }
         }
         

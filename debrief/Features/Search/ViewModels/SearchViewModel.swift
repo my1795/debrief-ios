@@ -17,13 +17,10 @@ class SearchViewModel: ObservableObject {
     @Published var error: Error?
     
     private var cancellables = Set<AnyCancellable>()
-    private var isVerbose: Bool { AppConfig.shared.isVerboseLoggingEnabled }
-    
+
     init() {
         setupSearchSubscription()
-        if isVerbose {
-            print("🔍 [SearchViewModel] Initialized - Verbose logging enabled")
-        }
+        Logger.debug("SearchViewModel initialized")
     }
     
     private func setupSearchSubscription() {
@@ -46,66 +43,50 @@ class SearchViewModel: ObservableObject {
         
         // Minimum length check to avoid low quality queries
         guard query.count >= AppConfig.shared.minimumSearchQueryLength else {
-            if isVerbose {
-                print("🔍 [SearchViewModel] Query too short (\(query.count) chars), skipping")
-            }
+            Logger.debug("Query too short (\(query.count) chars), skipping")
             return
         }
-        
-        if isVerbose {
-            print("🔍 [SearchViewModel] ========== SEARCH START ==========")
-            print("🔍 [SearchViewModel] Query: \"\(query)\"")
-        }
+
+        Logger.debug("========== SEARCH START ==========")
+        Logger.debug("Query: \"\(query)\"")
         
         isLoading = true
         error = nil
         
         do {
             guard let userId = Auth.auth().currentUser?.uid else {
-                if isVerbose {
-                    print("❌ [SearchViewModel] No authenticated user!")
-                }
+                Logger.error("No authenticated user!")
                 isLoading = false
                 return
             }
-            
+
             // Step 1: Call backend search API
-            if isVerbose {
-                print("🔍 [SearchViewModel] Step 1: Calling backend search API...")
-            }
-            
+            Logger.debug("Step 1: Calling backend search API...")
+
             let startTime = Date()
             let searchResults = try await APIService.shared.searchDebriefs(query: query, limit: 10)
-            
-            if isVerbose {
-                let elapsed = Date().timeIntervalSince(startTime)
-                print("🔍 [SearchViewModel] Backend search completed in \(String(format: "%.2f", elapsed))s")
-                print("🔍 [SearchViewModel] Results from backend: \(searchResults.count)")
-            }
-            
+
+            let elapsed = Date().timeIntervalSince(startTime)
+            Logger.debug("Backend search completed in \(String(format: "%.2f", elapsed))s")
+            Logger.debug("Results from backend: \(searchResults.count)")
+
             guard !searchResults.isEmpty else {
-                if isVerbose {
-                    print("🔍 [SearchViewModel] No results from backend, returning empty")
-                }
+                Logger.debug("No results from backend, returning empty")
                 self.searchResults = []
                 isLoading = false
                 return
             }
-            
+
             // Step 2: Fetch debriefs by IDs from Firestore
-            if isVerbose {
-                print("🔍 [SearchViewModel] Step 2: Fetching debriefs by IDs from Firestore...")
-            }
-            
+            Logger.debug("Step 2: Fetching debriefs by IDs from Firestore...")
+
             let debriefIds = searchResults.map { $0.debriefId }
             let fetchStart = Date()
             let debriefs = try await FirestoreService.shared.fetchDebriefsByIds(debriefIds, userId: userId)
-            
-            if isVerbose {
-                let fetchElapsed = Date().timeIntervalSince(fetchStart)
-                print("🔍 [SearchViewModel] Firestore fetch completed in \(String(format: "%.2f", fetchElapsed))s")
-                print("🔍 [SearchViewModel] Fetched \(debriefs.count) debriefs")
-            }
+
+            let fetchElapsed = Date().timeIntervalSince(fetchStart)
+            Logger.debug("Firestore fetch completed in \(String(format: "%.2f", fetchElapsed))s")
+            Logger.debug("Fetched \(debriefs.count) debriefs")
             
             // Step 3: Sort by similarity (preserving backend order)
             // Create a lookup for similarity scores
@@ -118,23 +99,19 @@ class SearchViewModel: ObservableObject {
                 return sim1 > sim2
             }
             
-            if isVerbose {
-                print("🔍 [SearchViewModel] ========== SEARCH COMPLETE ==========")
-                print("🔍 [SearchViewModel] Final results: \(sortedDebriefs.count)")
-                for (index, debrief) in sortedDebriefs.prefix(3).enumerated() {
-                    let similarity = similarityMap[debrief.id] ?? 0
-                    let summaryPreview = String(debrief.summary?.prefix(40) ?? "N/A")
-                    print("🔍 [SearchViewModel] \(index + 1). [\(String(format: "%.2f", similarity))] \(debrief.contactName): \(summaryPreview)...")
-                }
+            Logger.debug("========== SEARCH COMPLETE ==========")
+            Logger.debug("Final results: \(sortedDebriefs.count)")
+            for (index, debrief) in sortedDebriefs.prefix(3).enumerated() {
+                let similarity = similarityMap[debrief.id] ?? 0
+                let summaryPreview = String(debrief.summary?.prefix(40) ?? "N/A")
+                Logger.debug("\(index + 1). [\(String(format: "%.2f", similarity))] \(debrief.contactName): \(summaryPreview)...")
             }
-            
+
             self.searchResults = sortedDebriefs
-            
+
         } catch {
-            print("❌ [SearchViewModel] Search failed: \(error)")
-            if isVerbose {
-                print("❌ [SearchViewModel] Error details: \(error.localizedDescription)")
-            }
+            Logger.error("Search failed: \(error)")
+            Logger.error("Error details: \(error.localizedDescription)")
             self.error = error
         }
         

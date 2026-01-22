@@ -44,12 +44,10 @@ class DebriefDetailViewModel: ObservableObject {
         self.audioService = AudioPlaybackService()
         
         // Debug Logging
-        print("🔍 [DebriefDetailViewModel] Init with Debrief ID: \(debrief.id)")
-        print("   - Contact: \(debrief.contactName)")
-        print("   - Status: \(debrief.status)")
-        print("   - Audio URL: \(debrief.audioUrl ?? "N/A")")
-        print("   - Transcript Length: \(debrief.transcript?.count ?? 0)")
-        print("   - Action Items: \(debrief.actionItems?.count ?? 0)")
+        Logger.debug("Init with Debrief ID: \(debrief.id)")
+        Logger.debug("Contact: \(debrief.contactName), Status: \(debrief.status)")
+        Logger.debug("Audio URL: \(debrief.audioUrl ?? "N/A")")
+        Logger.debug("Transcript Length: \(debrief.transcript?.count ?? 0), Action Items: \(debrief.actionItems?.count ?? 0)")
         
         // Sync Audio State
         audioService.$isPlaying
@@ -108,7 +106,7 @@ class DebriefDetailViewModel: ObservableObject {
         isLoadingDetails = true
         Task {
             do {
-                print("🔄 [DebriefDetailViewModel] Fetching full details for ID: \(debrief.id)...")
+                Logger.sync("Fetching full details for ID: \(debrief.id)...")
                 let fullDebrief = try await firestoreService.getDebrief(userId: userId, debriefId: debrief.id)
                 
                 // Resolve Audio URL if missing but storage path exists
@@ -118,9 +116,9 @@ class DebriefDetailViewModel: ObservableObject {
                     do {
                         let url = try await storageService.getDownloadURL(for: storagePath)
                         resolvedAudioUrl = url.absoluteString
-                        print("🔗 [DebriefDetailViewModel] Resolved Audio Storage Path: \(url)")
+                        Logger.info("Resolved Audio Storage Path: \(url)")
                     } catch {
-                        print("⚠️ [DebriefDetailViewModel] Failed to resolve storage path: \(error)")
+                        Logger.warning("Failed to resolve storage path: \(error)")
                     }
                 }
                 
@@ -134,7 +132,7 @@ class DebriefDetailViewModel: ObservableObject {
                 // Strict V1 check: valid version exists
                 if fullDebrief.encryptionVersion != nil {
                     if let key = EncryptionKeyManager.shared.getKey(userId: userId) {
-                        print("🔐 [DebriefDetailViewModel] Decrypting text fields (Strict V1)...")
+                        Logger.auth("Decrypting text fields (Strict V1)...")
                         
                         func decrypt(_ text: String?) -> String? {
                             guard let text = text, !text.isEmpty else { return nil }
@@ -142,7 +140,7 @@ class DebriefDetailViewModel: ObservableObject {
                             do {
                                 return try EncryptionService.shared.decrypt(text, using: key)
                             } catch {
-                                print("⚠️ [DebriefDetailViewModel] Decrypt failed: \(error)")
+                                Logger.warning("Decrypt failed: \(error)")
                                 return text
                             }
                         }
@@ -153,7 +151,7 @@ class DebriefDetailViewModel: ObservableObject {
                             finalTexts.actionItems = items.map { decrypt($0) ?? $0 }
                         }
                     } else {
-                        print("⚠️ [DebriefDetailViewModel] Encrypted data but no key")
+                        Logger.warning("Encrypted data but no key")
                         errorMessage = "Decryption key missing"
                     }
                 }
@@ -177,11 +175,11 @@ class DebriefDetailViewModel: ObservableObject {
                 )
                 
                 self.debrief = updatedDebrief
-                print("✅ [DebriefDetailViewModel] Full details loaded.")
-                print("   - Summary: \(updatedDebrief.summary?.prefix(20) ?? "nil")...")
-                print("   - Audio URL: \(updatedDebrief.audioUrl ?? "nil")")
+                Logger.success("Full details loaded.")
+                Logger.debug("Summary: \(updatedDebrief.summary?.prefix(20) ?? "nil")...")
+                Logger.debug("Audio URL: \(updatedDebrief.audioUrl ?? "nil")")
             } catch {
-                print("❌ [DebriefDetailViewModel] Failed to load details: \(error)")
+                Logger.error("Failed to load details: \(error)")
                 self.errorMessage = "Failed to load full details"
             }
             isLoadingDetails = false
@@ -195,11 +193,11 @@ class DebriefDetailViewModel: ObservableObject {
     private func startListeningIfProcessing() {
         // Only start listener if status is not final
         guard debrief.status == .processing || debrief.status == .created || debrief.isRetrying else {
-            print("📡 [DebriefDetailViewModel] Status is \(debrief.status), no listener needed")
+            Logger.info("Status is \(debrief.status), no listener needed")
             return
         }
         
-        print("📡 [DebriefDetailViewModel] Starting real-time listener for status updates...")
+        Logger.info("Starting real-time listener for status updates...")
         
         debriefListener = firestoreService.listenToDebrief(debriefId: debrief.id) { [weak self] result in
             guard let self = self else { return }
@@ -207,7 +205,7 @@ class DebriefDetailViewModel: ObservableObject {
             Task { @MainActor in
                 switch result {
                 case .success(let updatedDebrief):
-                    print("📡 [DebriefDetailViewModel] Received update: status=\(updatedDebrief.status)")
+                    Logger.info("Received update: status=\(updatedDebrief.status)")
                     
                     // Update local state with new data
                     self.debrief = Debrief(
@@ -231,13 +229,13 @@ class DebriefDetailViewModel: ObservableObject {
                     
                     // Stop listening once status is final
                     if updatedDebrief.status == .ready || updatedDebrief.status == .failed {
-                        print("✅ [DebriefDetailViewModel] Final status reached, removing listener")
+                        Logger.success("Final status reached, removing listener")
                         self.debriefListener?.remove()
                         self.debriefListener = nil
                     }
                     
                 case .failure(let error):
-                    print("❌ [DebriefDetailViewModel] Listener error: \(error)")
+                    Logger.error("Listener error: \(error)")
                 }
             }
         }
@@ -255,11 +253,11 @@ class DebriefDetailViewModel: ObservableObject {
                 
                 completion()
             } catch {
-                print("❌ Error deleting debrief: \(error)")
+                Logger.error("Error deleting debrief: \(error)")
                 
                 // If it was already failed/local, or 404, we should remove it locally anyway
                 if debrief.status == .failed {
-                    print("⚠️ Force removing failed debrief locally")
+                    Logger.warning("Force removing failed debrief locally")
                     NotificationCenter.default.post(name: .didDeleteDebrief, object: nil, userInfo: ["debriefId": debrief.id])
                     completion()
                     return
@@ -273,7 +271,7 @@ class DebriefDetailViewModel: ObservableObject {
     
     func toggleAudio() {
         guard let urlString = debrief.audioUrl, let url = URL(string: urlString) else {
-            print("⚠️ [DebriefDetailViewModel] No valid audio URL")
+            Logger.warning("No valid audio URL")
             errorMessage = "No Audio URL found"
             return
         }
@@ -286,7 +284,7 @@ class DebriefDetailViewModel: ObservableObject {
             
             if isEncrypted {
                 guard let key = EncryptionKeyManager.shared.getKey(userId: userId) else {
-                    print("❌ [DebriefDetailViewModel] No encryption key found!")
+                    Logger.error("No encryption key found!")
                     errorMessage = "Decryption key missing"
                     return
                 }
@@ -390,9 +388,9 @@ class DebriefDetailViewModel: ObservableObject {
                     actionItems: items,
                     userId: userId
                 )
-                print("✅ [DebriefDetailViewModel] Action items saved to Firebase")
+                Logger.success("Action items saved to Firebase")
             } catch {
-                print("❌ [DebriefDetailViewModel] Failed to save action items: \(error)")
+                Logger.error("Failed to save action items: \(error)")
                 errorMessage = "Failed to save changes"
             }
         }

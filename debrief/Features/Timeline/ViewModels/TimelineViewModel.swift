@@ -108,7 +108,7 @@ class TimelineViewModel: ObservableObject {
         .sink(
             receiveCompletion: { [weak self] completion in
                 if case .failure(let error) = completion {
-                    print("❌ [TimelineViewModel] Debriefs listener failed: \(error)")
+                    Logger.error("Debriefs listener failed: \(error)")
                     self?.error = AppError.from(error)
                     self?.isLoading = false
                 }
@@ -133,7 +133,7 @@ class TimelineViewModel: ObservableObject {
 
                     self.groupDebriefsByDate()
 
-                    print("✅ [TimelineViewModel] Updated with \(resolvedDebriefs.count) debriefs (cache: \(result.isFromCache))")
+                    Logger.success("Updated with \(resolvedDebriefs.count) debriefs (cache: \(result.isFromCache))")
                 }
             }
         )
@@ -149,7 +149,7 @@ class TimelineViewModel: ObservableObject {
             .sink(
                 receiveCompletion: { completion in
                     if case .failure(let error) = completion {
-                        print("❌ [TimelineViewModel] Daily stats listener failed: \(error)")
+                        Logger.error("Daily stats listener failed: \(error)")
                     }
                 },
                 receiveValue: { [weak self] stats in
@@ -174,7 +174,7 @@ class TimelineViewModel: ObservableObject {
             let count = try await firestoreService.getCallsCount(userId: userId, start: startOfDay, end: endOfDay)
             self.dailyStats.todayCalls = count
         } catch {
-            print("⚠️ [TimelineViewModel] Failed to load calls count: \(error)")
+            Logger.warning("Failed to load calls count: \(error)")
         }
     }
 
@@ -205,7 +205,7 @@ class TimelineViewModel: ObservableObject {
         isLoadingMore = true
         currentLimit += 50 // Increase limit by 50
 
-        print("📥 [TimelineViewModel] Loading more... new limit: \(currentLimit)")
+        Logger.info("Loading more... new limit: \(currentLimit)")
 
         // Restart listener with new limit
         setupDebriefListener(userId: userId)

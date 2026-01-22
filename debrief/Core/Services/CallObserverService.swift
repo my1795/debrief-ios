@@ -24,7 +24,7 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
     override init() {
         super.init()
         callObserver.setDelegate(self, queue: nil)
-        print("📞 [CallObserver] Service initialized")
+        Logger.info("CallObserver service initialized")
     }
     
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
@@ -35,7 +35,7 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
         } else if call.isOutgoing || !call.hasConnected {
             // Dialing or Incoming ringing
             if !observedCalls.contains(call.uuid) {
-                print("📞 [CallObserver] New Call Detected: \(call.uuid) (Outgoing: \(call.isOutgoing))")
+                Logger.info("New Call Detected: \(call.uuid) (Outgoing: \(call.isOutgoing))")
                 observedCalls.insert(call.uuid)
             }
         }
@@ -44,12 +44,12 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
     private func handleCallConnected(_ call: CXCall) {
         guard callStartTimes[call.uuid] == nil else { return }
         
-        print("📞 [CallObserver] Call Connected: \(call.uuid)")
+        Logger.info("Call Connected: \(call.uuid)")
         callStartTimes[call.uuid] = Date()
     }
     
     private func handleCallEnded(_ call: CXCall) {
-        print("📞 [CallObserver] Call Ended: \(call.uuid). Connected: \(call.hasConnected)")
+        Logger.info("Call Ended: \(call.uuid). Connected: \(call.hasConnected)")
 
         // Clean up
         observedCalls.remove(call.uuid)
@@ -67,7 +67,7 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
             } else {
                 // If we missed the start (e.g. app launched mid-call), default to 0 or estimates
                 duration = 0
-                print("⚠️ [CallObserver] Missed start time for connected call")
+                Logger.warning("Missed start time for connected call")
             }
 
             // 1. Save Locally (Offline First)
@@ -83,7 +83,7 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
                 self.endBackgroundTask()
             }
         } else {
-            print("📞 [CallObserver] Call Ignored (Not connected/Answered)")
+            Logger.info("Call Ignored (Not connected/Answered)")
         }
     }
 
@@ -95,16 +95,16 @@ class CallObserverService: NSObject, CXCallObserverDelegate {
 
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "CallEndedTask") { [weak self] in
             // Expiration handler - clean up
-            print("⚠️ [CallObserver] Background task expired")
+            Logger.warning("Background task expired")
             self?.endBackgroundTask()
         }
-        print("📞 [CallObserver] Background task started: \(backgroundTask.rawValue)")
+        Logger.info("Background task started: \(backgroundTask.rawValue)")
     }
 
     private func endBackgroundTask() {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
-        print("📞 [CallObserver] Background task ended: \(backgroundTask.rawValue)")
+        Logger.info("Background task ended: \(backgroundTask.rawValue)")
         backgroundTask = .invalid
     }
 }

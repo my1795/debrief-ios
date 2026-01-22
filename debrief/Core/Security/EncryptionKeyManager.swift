@@ -28,7 +28,7 @@ final class EncryptionKeyManager {
     /// Call this after successful login.
     /// - Parameter userId: The authenticated user's ID (for Keychain account)
     func fetchAndStoreKey(userId: String) async throws {
-        print("🔐 [EncryptionKeyManager] Fetching encryption key for user: \(userId)")
+        Logger.auth("Fetching encryption key for user: \(userId)")
         
         do {
             let response = try await apiService.exchangeKey()
@@ -49,11 +49,11 @@ final class EncryptionKeyManager {
             cachedKey = keyData
             cachedUserId = userId
             
-            print("✅ [EncryptionKeyManager] Key stored in Keychain")
+            Logger.success("Key stored in Keychain")
             
         } catch let error as APIError where error.isEncryptionNotEnabled {
             // Encryption not enabled on server - this is OK, just log and continue
-            print("⚠️ [EncryptionKeyManager] Encryption not enabled on server")
+            Logger.warning("Encryption not enabled on server")
             return
         }
     }
@@ -85,16 +85,16 @@ final class EncryptionKeyManager {
     func ensureKeyAvailable(userId: String) async {
         // Already have key?
         if getKey(userId: userId) != nil {
-            print("✅ [EncryptionKeyManager] Key already available")
+            Logger.success("Key already available")
             return
         }
         
         // Need to fetch
-        print("🔄 [EncryptionKeyManager] Key not found, fetching...")
+        Logger.sync("Key not found, fetching...")
         do {
             try await fetchAndStoreKey(userId: userId)
         } catch {
-            print("⚠️ [EncryptionKeyManager] Failed to fetch key: \(error)")
+            Logger.warning("Failed to fetch key: \(error)")
             // Non-fatal: app can still work, decryption will gracefully degrade
         }
     }
@@ -111,9 +111,9 @@ final class EncryptionKeyManager {
         if let userId = userId {
             do {
                 try keychainService.delete(account: userId)
-                print("🗑 [EncryptionKeyManager] Key deleted from Keychain")
+                Logger.info("Key deleted from Keychain")
             } catch {
-                print("⚠️ [EncryptionKeyManager] Failed to delete key: \(error)")
+                Logger.warning("Failed to delete key: \(error)")
             }
         }
     }

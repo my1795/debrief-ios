@@ -76,7 +76,7 @@ final class ContactResolver {
         if let phone = debrief.phoneNumber, !phone.isEmpty {
             if let matchedContact = await contactStore.findContact(byPhone: phone) {
                 let name = matchedContact.name
-                print("📱 [ContactResolver] Matched by phone: \(phone) → \(name)")
+                Logger.info("Matched by phone: \(phone) → \(name)")
                 
                 // Update Firebase in background
                 Task {
@@ -92,7 +92,7 @@ final class ContactResolver {
         if let email = debrief.email, !email.isEmpty {
             if let matchedContact = await contactStore.findContact(byEmail: email) {
                 let name = matchedContact.name
-                print("📧 [ContactResolver] Matched by email: \(email) → \(name)")
+                Logger.info("Matched by email: \(email) → \(name)")
                 
                 // Update Firebase in background
                 Task {
@@ -136,7 +136,7 @@ final class ContactResolver {
                 contactName: contactName
             )
         } catch {
-            print("⚠️ [ContactResolver] Failed to update Firebase: \(error)")
+            Logger.warning("Failed to update Firebase: \(error)")
         }
     }
 }

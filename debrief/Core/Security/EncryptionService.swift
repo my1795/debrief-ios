@@ -73,25 +73,17 @@ final class EncryptionService {
     
     /// Downloads encrypted audio from URL, decrypts it, and saves to a temporary file.
     func downloadAndDecryptAudio(from url: URL, using key: Data) async throws -> URL {
-        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
-        
-        if isVerbose {
-             print("🔐 [EncryptionService] Downloading: \(url.lastPathComponent)")
-        }
-        
+        Logger.auth("Downloading: \(url.lastPathComponent)")
+
         // 1. Download
         let (encryptedData, _) = try await URLSession.shared.data(from: url)
-        
-        if isVerbose {
-            print("🔐 [EncryptionService] Downloaded \(encryptedData.count) bytes")
-        }
-        
+
+        Logger.auth("Downloaded \(encryptedData.count) bytes")
+
         // 2. Decrypt
         let decryptedData = try decryptAudioData(encryptedData, using: key)
-        
-        if isVerbose {
-            print("🔐 [EncryptionService] Decrypted to \(decryptedData.count) bytes")
-        }
+
+        Logger.auth("Decrypted to \(decryptedData.count) bytes")
         
         // 3. Save
         let tempDir = FileManager.default.temporaryDirectory

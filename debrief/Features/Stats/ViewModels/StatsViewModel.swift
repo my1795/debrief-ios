@@ -95,7 +95,7 @@ class StatsViewModel: ObservableObject {
             .sink(
                 receiveCompletion: { [weak self] completion in
                     if case .failure(let err) = completion {
-                        print("❌ [StatsViewModel] UserPlan listener failed: \(err)")
+                        Logger.error("UserPlan listener failed: \(err)")
                         self?.error = AppError.from(err)
                         self?.quotaError = true
                         self?.weeklyStatsError = true
@@ -109,7 +109,7 @@ class StatsViewModel: ObservableObject {
                 receiveValue: { [weak self] plan in
                     guard let self = self else { return }
 
-                    print("⚡️ [StatsViewModel] Real-time UserPlan update received")
+                    Logger.sync("Real-time UserPlan update received")
 
                     self.userPlan = plan
                     self.updateAllStatsFromPlan(plan)
@@ -172,7 +172,7 @@ class StatsViewModel: ObservableObject {
             longestStreak: self.longestStreak   // From calculated stats
         )
 
-        print("✅ [StatsViewModel] All stats updated from UserPlan (offline-ready)")
+        Logger.success("All stats updated from UserPlan (offline-ready)")
     }
 
     // MARK: - Calculated Stats with 6-Hour Cache
@@ -185,14 +185,14 @@ class StatsViewModel: ObservableObject {
         if let cached = loadCachedCalculatedStats(userId: userId, weekStart: weekStart) {
             self.mostActiveDay = cached.mostActiveDay
             self.longestStreak = cached.longestStreak
-            print("📦 [StatsViewModel] Using cached calculated stats (mostActiveDay: \(cached.mostActiveDay), streak: \(cached.longestStreak))")
+            Logger.data("Using cached calculated stats (mostActiveDay: \(cached.mostActiveDay), streak: \(cached.longestStreak))")
 
             // If cache is still valid, don't fetch
             if cached.isValid {
                 return
             }
             // Cache expired but we have data - fetch in background, keep showing cached values
-            print("⏰ [StatsViewModel] Cache expired, fetching fresh data in background...")
+            Logger.info("Cache expired, fetching fresh data in background...")
         } else {
             // No cache - show loading state
             isLoadingCalculatedStats = true
@@ -223,7 +223,7 @@ class StatsViewModel: ObservableObject {
         .sink(
             receiveCompletion: { [weak self] completion in
                 if case .failure(let error) = completion {
-                    print("❌ [StatsViewModel] Weekly debriefs listener failed: \(error)")
+                    Logger.error("Weekly debriefs listener failed: \(error)")
                 }
                 self?.isLoadingCalculatedStats = false
             },
@@ -257,7 +257,7 @@ class StatsViewModel: ObservableObject {
                     weekStart: weekStart
                 )
 
-                print("✅ [StatsViewModel] Calculated stats updated - mostActiveDay: \(calculatedMostActiveDay), streak: \(calculatedStreak) (from \(result.debriefs.count) debriefs, cache: \(result.isFromCache))")
+                Logger.success("Calculated stats updated - mostActiveDay: \(calculatedMostActiveDay), streak: \(calculatedStreak) (from \(result.debriefs.count) debriefs, cache: \(result.isFromCache))")
             }
         )
     }
@@ -327,7 +327,7 @@ class StatsViewModel: ObservableObject {
         // Check if cache is for the same week
         let calendar = Calendar.current
         guard calendar.isDate(cache.weekStart, inSameDayAs: weekStart) else {
-            print("📦 [StatsViewModel] Cache is for different week, invalidating")
+            Logger.data("Cache is for different week, invalidating")
             return nil
         }
 
@@ -345,7 +345,7 @@ class StatsViewModel: ObservableObject {
         if let data = try? JSONEncoder().encode(cache) {
             let key = "\(cacheKey)_\(userId)"
             UserDefaults.standard.set(data, forKey: key)
-            print("💾 [StatsViewModel] Saved calculated stats to cache")
+            Logger.data("Saved calculated stats to cache")
         }
     }
 
@@ -373,7 +373,7 @@ class StatsViewModel: ObservableObject {
         // Assuming UserQuota has similar fields. If UserQuota definition isn't visible, 
         // I'll infer based on typical naming.
         // Debug Log
-        print("🔍 [StatsViewModel] Mapping Quota - Seconds: \(userQuota.usedRecordingSeconds) -> Minutes: \(userQuota.usedRecordingMinutes)")
+        Logger.debug("Mapping Quota - Seconds: \(userQuota.usedRecordingSeconds) -> Minutes: \(userQuota.usedRecordingMinutes)")
         
         return StatsQuota(
             tier: userQuota.subscriptionTier,
@@ -402,7 +402,7 @@ class StatsViewModel: ObservableObject {
             let age = now.timeIntervalSince(cache.timestamp)
 
             if isSameWeek && age < 12 * 3600 {
-                print("⚡️ [StatsViewModel] Using Cached Top Contacts (Age: \(Int(age) / 60) min)")
+                Logger.data("Using Cached Top Contacts (Age: \(Int(age) / 60) min)")
                 self.topContacts = cache.stats
                 return
             }
@@ -416,7 +416,7 @@ class StatsViewModel: ObservableObject {
         // Move heavy work to background thread
         Task.detached(priority: .userInitiated) { [weak self, weekStart, weekEnd, userId] in
             do {
-                print("⚡️ [StatsViewModel] Fetching Debriefs for Top Contacts (background)...")
+                Logger.sync("Fetching Debriefs for Top Contacts (background)...")
 
                 // Fetch only required fields using select() for smaller payload
                 let debriefs = try await FirestoreService.shared.fetchDebriefs(
@@ -474,7 +474,7 @@ class StatsViewModel: ObservableObject {
                 }
 
             } catch {
-                print("❌ [StatsViewModel] Failed to calculate Top Contacts: \(error)")
+                Logger.error("Failed to calculate Top Contacts: \(error)")
                 await MainActor.run { [weak self] in
                     self?.isLoadingTopContacts = false
                 }

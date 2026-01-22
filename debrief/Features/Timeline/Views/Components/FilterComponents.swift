@@ -172,7 +172,7 @@ class ContactPickerViewModel: ObservableObject {
                 self.contacts = fetched
             }
         } catch {
-            print("Failed to fetch contacts: \(error)")
+            Logger.error("Failed to fetch contacts: \(error)")
         }
     }
 }

@@ -138,7 +138,7 @@ class ContactStoreService: ContactStoreServiceProtocol {
             cacheTimestamp = Date()
             return contacts
         } catch {
-            print("⚠️ [ContactStoreService] Failed to fetch contacts: \(error)")
+            Logger.warning("Failed to fetch contacts: \(error)")
             return cachedContacts ?? []
         }
     }

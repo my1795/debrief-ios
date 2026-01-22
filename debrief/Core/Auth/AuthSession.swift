@@ -44,7 +44,7 @@ class AuthSession: ObservableObject {
     
     private func handleAuthStateChange(_ authUser: AuthUser?) {
         if let authUser = authUser {
-            print("✅ [AuthSession] User is signed in: \(authUser.id)")
+            Logger.success("User is signed in: \(authUser.id)")
             self.user = User(
                 id: authUser.id,
                 email: authUser.email,
@@ -58,7 +58,7 @@ class AuthSession: ObservableObject {
                 await EncryptionKeyManager.shared.ensureKeyAvailable(userId: authUser.id)
             }
         } else {
-            print("👋 [AuthSession] User is signed out")
+            Logger.info("User is signed out")
             self.user = nil
             self.isAuthenticated = false
         }
@@ -75,7 +75,7 @@ class AuthSession: ObservableObject {
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
         } catch {
-            print("❌ [AuthSession] Sign In Error: \(error)")
+            Logger.error("Sign In Error: \(error)")
             self.error = error
         }
         
@@ -92,7 +92,7 @@ class AuthSession: ObservableObject {
             
             try authService.signOut()
         } catch {
-            print("❌ [AuthSession] Sign Out Error: \(error)")
+            Logger.error("Sign Out Error: \(error)")
             self.error = error
         }
     }

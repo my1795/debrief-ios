@@ -90,7 +90,7 @@ class RecordViewModel: ObservableObject {
     
     func fetchContacts() async {
         guard await contactStoreService.requestAccess() else {
-            print("Access denied")
+            Logger.warning("Contacts access denied")
             return
         }
         
@@ -100,7 +100,7 @@ class RecordViewModel: ObservableObject {
                 self.contacts = fetched.sorted { $0.name < $1.name }
             }
         } catch {
-            print("Failed to fetch contacts: \(error)")
+            Logger.error("Failed to fetch contacts: \(error)")
         }
     }
     
@@ -119,7 +119,7 @@ class RecordViewModel: ObservableObject {
             state = .recording
             startTimer()
         } catch {
-            print("Failed to start: \(error)")
+            Logger.error("Failed to start recording: \(error)")
         }
     }
 
@@ -130,7 +130,7 @@ class RecordViewModel: ObservableObject {
 
         // Ensure Firebase Auth is ready before making Firestore calls
         guard Auth.auth().currentUser != nil else {
-            print("⚠️ [RecordViewModel] Firebase Auth not ready, skipping pre-flight check")
+            Logger.warning("Firebase Auth not ready, skipping pre-flight check")
             return nil // Don't block recording, backend will validate
         }
 
@@ -155,7 +155,7 @@ class RecordViewModel: ObservableObject {
 
             return nil
         } catch {
-            print("⚠️ [RecordViewModel] Pre-flight quota check failed: \(error)")
+            Logger.warning("Pre-flight quota check failed: \(error)")
             // Don't block recording if check fails - backend will validate
             return nil
         }
@@ -187,7 +187,7 @@ class RecordViewModel: ObservableObject {
 
                     // Auto-stop at max duration (600 seconds / 10 minutes)
                     if currentTime >= AppConfig.shared.maxRecordingDurationSeconds {
-                        print("⏱️ [RecordViewModel] Max duration reached (\(AppConfig.shared.maxRecordingDurationSeconds)s), auto-stopping")
+                        Logger.info("Max duration reached (\(AppConfig.shared.maxRecordingDurationSeconds)s), auto-stopping")
                         self.stopRecording()
                     }
                 }
@@ -275,7 +275,7 @@ class RecordViewModel: ObservableObject {
             }
             
         } catch {
-            print("Failed to check quota logic: \(error)")
+            Logger.error("Failed to check quota logic: \(error)")
         }
     }
     
@@ -289,7 +289,7 @@ class RecordViewModel: ObservableObject {
         
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Error showing notification: \(error)")
+                Logger.error("Error showing notification: \(error)")
             }
         }
     }

@@ -75,15 +75,11 @@ class FirestoreService {
     /// Fetches debriefs by their IDs, typically after receiving search results from backend.
     /// Fetches in parallel and decrypts as needed.
     func fetchDebriefsByIds(_ ids: [String], userId: String) async throws -> [Debrief] {
-        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
-        
         guard !ids.isEmpty else { return [] }
-        
-        if isVerbose {
-            print("🗄️ [FirestoreService.fetchDebriefsByIds] ========== FETCH ==========")
-            print("🗄️ [FirestoreService.fetchDebriefsByIds] IDs to fetch: \(ids.count)")
-            print("🗄️ [FirestoreService.fetchDebriefsByIds] IDs: \(ids.prefix(5).joined(separator: ", "))...")
-        }
+
+        Logger.data("========== FETCH BY IDS ==========")
+        Logger.data("IDs to fetch: \(ids.count)")
+        Logger.debug("IDs: \(ids.prefix(5).joined(separator: ", "))...")
         
         // Fetch in parallel using TaskGroup
         let debriefs = try await withThrowingTaskGroup(of: Debrief?.self) { group in
@@ -103,16 +99,12 @@ class FirestoreService {
             return results
         }
         
-        if isVerbose {
-            print("🗄️ [FirestoreService.fetchDebriefsByIds] Fetched \(debriefs.count) / \(ids.count) debriefs")
-            print("🗄️ [FirestoreService.fetchDebriefsByIds] Decrypting if needed...")
-        }
+        Logger.data("Fetched \(debriefs.count) / \(ids.count) debriefs")
+        Logger.debug("Decrypting if needed...")
         
         let result = decryptIfNeeded(debriefs, userId: userId)
         
-        if isVerbose {
-            print("✅ [FirestoreService.fetchDebriefsByIds] Complete. Returning \(result.count) decrypted debriefs")
-        }
+        Logger.success("Fetch complete. Returning \(result.count) decrypted debriefs")
         
         return result
     }
@@ -174,7 +166,7 @@ class FirestoreService {
 
         let listener = query.addSnapshotListener { [weak self] snapshot, error in
             if let error = error {
-                print("❌ [FirestoreService] Debriefs listener error: \(error)")
+                Logger.error("Debriefs listener error: \(error)")
                 subject.send(completion: .failure(error))
                 return
             }
@@ -182,7 +174,7 @@ class FirestoreService {
             guard let snapshot = snapshot else { return }
 
             let isFromCache = snapshot.metadata.isFromCache
-            print("📡 [FirestoreService] Debriefs update - \(snapshot.documents.count) docs (cache: \(isFromCache))")
+            Logger.data("Debriefs update - \(snapshot.documents.count) docs (cache: \(isFromCache))")
 
             let debriefs = snapshot.documents.compactMap { doc -> Debrief? in
                 try? doc.data(as: Debrief.self)
@@ -203,7 +195,7 @@ class FirestoreService {
 
         return subject
             .handleEvents(receiveCancel: {
-                print("🛑 [FirestoreService] Debriefs listener removed")
+                Logger.info("Debriefs listener removed")
                 listener.remove()
             })
             .eraseToAnyPublisher()
@@ -269,7 +261,7 @@ class FirestoreService {
                 }
 
                 guard let document = snapshot, document.exists else {
-                    print("⚠️ [FirestoreService] No user_plan found for \(userId)")
+                    Logger.warning("No user_plan found for \(userId)")
                     return
                 }
 
@@ -277,7 +269,7 @@ class FirestoreService {
                     let plan = try document.data(as: UserPlan.self)
                     subject.send(plan)
                 } catch {
-                    print("❌ [FirestoreService] Failed to decode UserPlan: \(error)")
+                    Logger.error("Failed to decode UserPlan: \(error)")
                     subject.send(completion: .failure(error))
                 }
             }
@@ -424,7 +416,7 @@ class FirestoreService {
                     
                     completion(.success(debrief))
                 } catch {
-                    print("❌ [FirestoreService] Failed to decode debrief update: \(error)")
+                    Logger.error("Failed to decode debrief update: \(error)")
                     completion(.failure(error))
                 }
             }
@@ -698,7 +690,7 @@ class FirestoreService {
         
         // Get encryption key
         guard let key = EncryptionKeyManager.shared.getKey(userId: userId) else {
-            print("⚠️ [FirestoreService] No encryption key available for decryption")
+            Logger.warning("No encryption key available for decryption")
             return debrief
         }
         
@@ -750,7 +742,7 @@ class FirestoreService {
             .document(debriefId)
             .updateData(["contactName": contactName])
         
-        print("✅ [FirestoreService] Updated contactName for \(debriefId) to '\(contactName)'")
+        Logger.success("Updated contactName for \(debriefId) to '\(contactName)'")
     }
     
     // MARK: - Action Items Update
@@ -774,13 +766,13 @@ class FirestoreService {
                     try encryptionService.encrypt(item, using: key)
                 }
                 isEncrypted = true
-                print("🔐 [FirestoreService] Encrypted \(finalItems.count) action items (V1)")
+                Logger.auth("Encrypted \(finalItems.count) action items (V1)")
             } catch {
-                print("❌ [FirestoreService] Failed to encrypt action items: \(error). Aborting update.")
+                Logger.error("Failed to encrypt action items: \(error). Aborting update.")
                 throw error
             }
         } else {
-            print("⚠️ [FirestoreService] No encryption key, saving plaintext")
+            Logger.warning("No encryption key, saving plaintext")
         }
         
         // Update Firebase
@@ -797,6 +789,6 @@ class FirestoreService {
             .document(debriefId)
             .updateData(updateData)
         
-        print("✅ [FirestoreService] Updated action items for \(debriefId)")
+        Logger.success("Updated action items for \(debriefId)")
     }
 }

@@ -53,7 +53,7 @@ class SettingsViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { completion in
                 if case .failure(let error) = completion {
-                    print("Error fetching quota for settings: \(error)")
+                    Logger.error("Error fetching quota for settings: \(error)")
                 }
             }, receiveValue: { [weak self] quota in
                 self?.currentPlan = quota.subscriptionTier
@@ -118,7 +118,7 @@ class SettingsViewModel: ObservableObject {
 
                 let freedMB = response.freedStorageMB ?? 0
                 let deletedFiles = response.deletedFilesCount ?? 0
-                print("✅ [Settings] Request accepted. Freed \(freedMB) MB, deleted \(deletedFiles) files")
+                Logger.success("Request accepted. Freed \(freedMB) MB, deleted \(deletedFiles) files")
 
                 // 2. Delete local audio files only (not all documents)
                 deleteLocalAudioFiles()
@@ -133,7 +133,7 @@ class SettingsViewModel: ObservableObject {
                     }
                 }
             } catch {
-                print("❌ [Settings] Error freeing voice storage: \(error)")
+                Logger.error("Error freeing voice storage: \(error)")
                 await MainActor.run {
                     self.isClearingVoiceData = false
                 }
@@ -152,11 +152,11 @@ class SettingsViewModel: ObservableObject {
             for fileURL in fileURLs {
                 if audioExtensions.contains(fileURL.pathExtension.lowercased()) {
                     try FileManager.default.removeItem(at: fileURL)
-                    print("🗑️ [Settings] Deleted local audio: \(fileURL.lastPathComponent)")
+                    Logger.info("Deleted local audio: \(fileURL.lastPathComponent)")
                 }
             }
         } catch {
-            print("⚠️ [Settings] Error deleting local audio files: \(error)")
+            Logger.warning("Error deleting local audio files: \(error)")
         }
     }
     
@@ -186,7 +186,7 @@ class SettingsViewModel: ObservableObject {
                 try Auth.auth().signOut()
                 // Session listener in App entry point should handle navigation to Login
             } catch {
-                print("Error deleting account: \(error)")
+                Logger.error("Error deleting account: \(error)")
                 isDeletingAccount = false
             }
         }

@@ -82,18 +82,13 @@ class APIService {
     }
     
     func searchDebriefs(query: String, limit: Int = 10) async throws -> [SearchResult] {
-        let isVerbose = AppConfig.shared.isVerboseLoggingEnabled
-        
         guard let url = URL(string: "\(baseURL)/debriefs/search") else {
             throw APIError.invalidURL
         }
-        
-        if isVerbose {
-            print("🔍 [APIService.searchDebriefs] ========== REQUEST ==========")
-            print("🔍 [APIService.searchDebriefs] URL: \(url.absoluteString)")
-            print("🔍 [APIService.searchDebriefs] Query: \"\(query)\"")
-            print("🔍 [APIService.searchDebriefs] Limit: \(limit)")
-        }
+
+        Logger.debug("========== SEARCH REQUEST ==========")
+        Logger.network("URL: \(url.absoluteString)")
+        Logger.debug("Query: \"\(query)\", Limit: \(limit)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -108,10 +103,8 @@ class APIService {
         let encoder = JSONEncoder()
         request.httpBody = try encoder.encode(SearchRequest(query: query, limit: limit))
         
-        if isVerbose {
-            if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
-                print("🔍 [APIService.searchDebriefs] JSON sent: \(jsonString)")
-            }
+        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+            Logger.debug("JSON sent: \(jsonString)")
         }
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -120,37 +113,28 @@ class APIService {
             throw APIError.invalidResponse
         }
         
-        if isVerbose {
-            print("🔍 [APIService.searchDebriefs] ========== RESPONSE ==========")
-            print("🔍 [APIService.searchDebriefs] Status code: \(httpResponse.statusCode)")
-            print("🔍 [APIService.searchDebriefs] Response size: \(data.count) bytes")
-        }
+        Logger.debug("========== SEARCH RESPONSE ==========")
+        Logger.network("Status code: \(httpResponse.statusCode), Response size: \(data.count) bytes")
         
         guard 200...299 ~= httpResponse.statusCode else {
-            if isVerbose {
-                if let responseBody = String(data: data, encoding: .utf8) {
-                    print("❌ [APIService.searchDebriefs] Error body: \(responseBody)")
-                }
+            if let responseBody = String(data: data, encoding: .utf8) {
+                Logger.error("Error body: \(responseBody)")
             }
             throw APIError.serverError(httpResponse.statusCode)
         }
         
         // Log raw response for debugging
-        if isVerbose {
-            if let rawJSON = String(data: data, encoding: .utf8) {
-                print("🔍 [APIService.searchDebriefs] Raw JSON: \(rawJSON)")
-            }
+        if let rawJSON = String(data: data, encoding: .utf8) {
+            Logger.debug("Raw JSON: \(rawJSON)")
         }
         
         let decoder = JSONDecoder()
         // Note: Backend uses camelCase (debriefId), no conversion needed
         let results = try decoder.decode([SearchResult].self, from: data)
         
-        if isVerbose {
-            print("✅ [APIService.searchDebriefs] Success! Results: \(results.count)")
-            for (i, result) in results.prefix(5).enumerated() {
-                print("   \(i+1). ID: \(result.debriefId), Similarity: \(String(format: "%.3f", result.similarity))")
-            }
+        Logger.success("Search success! Results: \(results.count)")
+        for (i, result) in results.prefix(5).enumerated() {
+            Logger.debug("   \(i+1). ID: \(result.debriefId), Similarity: \(String(format: "%.3f", result.similarity))")
         }
         
         return results
@@ -311,14 +295,14 @@ class APIService {
         
         // Must have authenticated user
         guard let user = Auth.auth().currentUser else {
-            print("❌ [APIService] exchangeKey: No authenticated user")
+            Logger.error("exchangeKey: No authenticated user")
             throw APIError.invalidResponse
         }
         
         let token = try await user.getIDToken()
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        print("🔐 [APIService] POST /auth/exchange-key")
+        Logger.auth("POST /auth/exchange-key")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -328,7 +312,7 @@ class APIService {
         
         // Handle 503 (encryption disabled on server)
         if httpResponse.statusCode == 503 {
-            print("⚠️ [APIService] Encryption not enabled on server (503)")
+            Logger.warning("Encryption not enabled on server (503)")
             throw APIError.serverError(503)
         }
         
@@ -498,17 +482,17 @@ class APIService {
         if let user = Auth.auth().currentUser {
             let token = try await user.getIDToken()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            print("🔐 [APIService] Added Auth Token (Start): \(token.prefix(10))...")
+            Logger.auth("Added Auth Token (Start): \(token.prefix(10))...")
         } else {
-            print("⚠️ [APIService] No User Signed In - Missing Auth Token!")
+            Logger.warning("No User Signed In - Missing Auth Token!")
         }
         
         if let body = body {
             request.httpBody = body
         }
         
-        print("🚀 [APIService] \(method) \(endpoint)")
-        print("   headers: \(request.allHTTPHeaderFields ?? [:])")
+        Logger.network("\(method) \(endpoint)")
+        Logger.debug("headers: \(request.allHTTPHeaderFields ?? [:])")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
