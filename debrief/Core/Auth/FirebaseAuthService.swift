@@ -2,9 +2,13 @@ import Foundation
 import FirebaseAuth
 import GoogleSignIn
 import FirebaseCore
+import AuthenticationServices
+import CryptoKit
 
-class FirebaseAuthService: AuthServiceProtocol {
+class FirebaseAuthService: NSObject, AuthServiceProtocol {
     private var authStateHandle: AuthStateDidChangeListenerHandle?
+    private var currentNonce: String?
+    private var appleSignInContinuation: CheckedContinuation<AuthUser, Error>?
     
     var currentUser: AuthUser? {
         guard let user = Auth.auth().currentUser else { return nil }
@@ -60,7 +64,54 @@ class FirebaseAuthService: AuthServiceProtocol {
         Logger.info("Signing out...")
         try Auth.auth().signOut()
     }
-    
+
+    // MARK: - Apple Sign In
+
+    @MainActor
+    func signInWithApple() async throws -> AuthUser {
+        Logger.auth("Starting Apple Sign-In...")
+
+        let nonce = randomNonceString()
+        currentNonce = nonce
+
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            throw NSError(domain: "AuthError", code: -2, userInfo: [NSLocalizedDescriptionKey: "No Root UI"])
+        }
+
+        authorizationController.presentationContextProvider = ApplePresentationContext(window: window)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            self.appleSignInContinuation = continuation
+            authorizationController.performRequests()
+        }
+    }
+
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: - Listener
     
     func listenToAuthState(onChange: @escaping (AuthUser?) -> Void) -> AnyObject {
@@ -74,7 +125,7 @@ class FirebaseAuthService: AuthServiceProtocol {
     }
     
     // MARK: - Helper
-    
+
     private func mapUser(_ user: FirebaseAuth.User) -> AuthUser {
         return AuthUser(
             id: user.uid,
@@ -83,5 +134,69 @@ class FirebaseAuthService: AuthServiceProtocol {
             photoURL: user.photoURL,
             isAnonymous: user.isAnonymous
         )
+    }
+}
+
+// MARK: - ASAuthorizationControllerDelegate
+
+extension FirebaseAuthService: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            appleSignInContinuation?.resume(throwing: NSError(domain: "AuthError", code: -4, userInfo: [NSLocalizedDescriptionKey: "Invalid credential type"]))
+            appleSignInContinuation = nil
+            return
+        }
+
+        guard let nonce = currentNonce else {
+            appleSignInContinuation?.resume(throwing: NSError(domain: "AuthError", code: -5, userInfo: [NSLocalizedDescriptionKey: "Invalid state: missing nonce"]))
+            appleSignInContinuation = nil
+            return
+        }
+
+        guard let appleIDToken = appleIDCredential.identityToken,
+              let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            appleSignInContinuation?.resume(throwing: NSError(domain: "AuthError", code: -6, userInfo: [NSLocalizedDescriptionKey: "Unable to fetch identity token"]))
+            appleSignInContinuation = nil
+            return
+        }
+
+        let credential = OAuthProvider.appleCredential(
+            withIDToken: idTokenString,
+            rawNonce: nonce,
+            fullName: appleIDCredential.fullName
+        )
+
+        Task {
+            do {
+                Logger.auth("Signing in to Firebase with Apple credential...")
+                let authResult = try await Auth.auth().signIn(with: credential)
+                Logger.success("Apple Sign-In Success! User ID: \(authResult.user.uid)")
+                appleSignInContinuation?.resume(returning: mapUser(authResult.user))
+            } catch {
+                Logger.error("Firebase Apple Sign-In Error: \(error)")
+                appleSignInContinuation?.resume(throwing: error)
+            }
+            appleSignInContinuation = nil
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        Logger.error("Apple Sign-In Error: \(error)")
+        appleSignInContinuation?.resume(throwing: error)
+        appleSignInContinuation = nil
+    }
+}
+
+// MARK: - Apple Presentation Context
+
+private class ApplePresentationContext: NSObject, ASAuthorizationControllerPresentationContextProviding {
+    private let window: UIWindow
+
+    init(window: UIWindow) {
+        self.window = window
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return window
     }
 }

@@ -11,6 +11,7 @@ struct AuthUser {
 protocol AuthServiceProtocol {
     var currentUser: AuthUser? { get }
     func signInWithGoogle() async throws -> AuthUser
+    func signInWithApple() async throws -> AuthUser
     func signOut() throws
     func listenToAuthState(onChange: @escaping (AuthUser?) -> Void) -> AnyObject // Returns observer handle
 }

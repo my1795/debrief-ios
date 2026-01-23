@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @ObservedObject var authSession: AuthSession
@@ -63,6 +64,31 @@ struct LoginView: View {
                     }
                     .padding(.bottom, 8)
                     
+                    // Apple Sign In Button
+                    Button {
+                        Task {
+                            await authSession.signInWithApple()
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if authSession.loadingProvider == .apple {
+                                ProgressView()
+                                    .tint(.white)
+                                Text("Signing in...")
+                            } else {
+                                Image(systemName: "apple.logo")
+                                Text("Continue with Apple")
+                            }
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(.black)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .disabled(authSession.isLoading)
+
                     // Google Sign In Button
                     Button {
                         Task {
@@ -70,12 +96,12 @@ struct LoginView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            if authSession.isLoading {
+                            if authSession.loadingProvider == .google {
                                 ProgressView()
                                     .tint(.black)
                                 Text("Signing in...")
                             } else {
-                                Image(systemName: "globe") // Fallback for Chrome icon
+                                Image(systemName: "globe")
                                 Text("Continue with Google")
                             }
                         }

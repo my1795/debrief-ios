@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 import Combine
 
 @MainActor
@@ -30,6 +31,7 @@ class TimelineViewModel: ObservableObject {
     private var currentLimit = 50  // Start with 50, increase on "load more"
     private var hasMore = true
     private var currentUserId: String?
+    private var hasRetriedAfterAuthError = false  // Track if we already retried after auth error
 
     private let firestoreService = FirestoreService.shared
     private var cancellables = Set<AnyCancellable>()
@@ -89,6 +91,7 @@ class TimelineViewModel: ObservableObject {
         currentLimit = 50
         hasMore = true
         isLoading = true
+        hasRetriedAfterAuthError = false  // Reset retry flag for new session
 
         setupDebriefListener(userId: userId)
         setupDailyStatsListener(userId: userId)
@@ -109,12 +112,33 @@ class TimelineViewModel: ObservableObject {
             receiveCompletion: { [weak self] completion in
                 if case .failure(let error) = completion {
                     Logger.error("Debriefs listener failed: \(error)")
-                    self?.error = AppError.from(error)
+                    let appError = AppError.from(error)
+
+                    // Handle auth errors: retry once with fresh token before showing error
+                    if appError == .unauthorized, let self = self, !self.hasRetriedAfterAuthError {
+                        Logger.warning("Auth error on first attempt, refreshing token and retrying...")
+                        self.hasRetriedAfterAuthError = true
+
+                        Task { @MainActor in
+                            // Force token refresh
+                            _ = try? await Auth.auth().currentUser?.getIDToken(forcingRefresh: true)
+                            // Retry listener
+                            if let userId = self.currentUserId {
+                                self.setupDebriefListener(userId: userId)
+                            }
+                        }
+                        return
+                    }
+
+                    self?.error = appError
                     self?.isLoading = false
                 }
             },
             receiveValue: { [weak self] result in
                 guard let self = self else { return }
+
+                // Reset retry flag on successful data (allows future retry if auth expires later)
+                self.hasRetriedAfterAuthError = false
 
                 Task { @MainActor in
                     // Resolve names locally (Address Book lookup)

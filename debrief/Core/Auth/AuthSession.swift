@@ -16,13 +16,20 @@ struct User: Identifiable, Codable {
     let photoURL: URL?
 }
 
+enum AuthProvider {
+    case google
+    case apple
+}
+
 @MainActor
 class AuthSession: ObservableObject {
     static let shared = AuthSession() // Singleton for easier access in non-view contexts
     @Published var user: User?
     @Published var isAuthenticated: Bool = false
-    @Published var isLoading: Bool = false
+    @Published var loadingProvider: AuthProvider? = nil
     @Published var error: Error?
+
+    var isLoading: Bool { loadingProvider != nil }
 
     private let authService: AuthServiceProtocol
     private var authListenerHandle: AnyObject?
@@ -65,21 +72,39 @@ class AuthSession: ObservableObject {
     }
     
     func signInWithGoogle() async {
-        isLoading = true
+        loadingProvider = .google
         error = nil
-        
+
         do {
             let authUser = try await authService.signInWithGoogle()
             // State update handled by listener
-            
+
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
         } catch {
             Logger.error("Sign In Error: \(error)")
             self.error = error
         }
-        
-        isLoading = false
+
+        loadingProvider = nil
+    }
+
+    func signInWithApple() async {
+        loadingProvider = .apple
+        error = nil
+
+        do {
+            let authUser = try await authService.signInWithApple()
+            // State update handled by listener
+
+            // Fetch and store encryption key after successful login
+            try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
+        } catch {
+            Logger.error("Apple Sign In Error: \(error)")
+            self.error = error
+        }
+
+        loadingProvider = nil
     }
     
     func signOut() {
