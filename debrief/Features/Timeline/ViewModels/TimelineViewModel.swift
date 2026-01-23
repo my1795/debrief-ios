@@ -61,6 +61,17 @@ class TimelineViewModel: ObservableObject {
                 self?.groupDebriefsByDate()
             }
             .store(in: &cancellables)
+
+        // Re-decrypt when encryption key becomes ready (no network call, just local decrypt)
+        AuthSession.shared.$isKeyReady
+            .dropFirst()  // Skip initial value
+            .filter { $0 == true }  // Only when key becomes ready
+            .sink { [weak self] _ in
+                guard let self = self, let userId = self.currentUserId else { return }
+                Logger.info("Key ready, re-decrypting cached debriefs...")
+                self.reDecryptDebriefs(userId: userId)
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -262,6 +273,17 @@ class TimelineViewModel: ObservableObject {
     // Helper: Address Book Lookup (now uses shared ContactResolver)
     private func resolveNames(for debriefs: [Debrief]) async -> [Debrief] {
         return await ContactResolver.shared.resolveDebriefs(debriefs)
+    }
+
+    /// Re-decrypts cached debriefs when encryption key becomes available.
+    /// No network call - just local decryption of already-fetched data.
+    private func reDecryptDebriefs(userId: String) {
+        guard !debriefs.isEmpty else { return }
+
+        let decrypted = firestoreService.decryptIfNeeded(debriefs, userId: userId)
+        self.debriefs = decrypted
+        groupDebriefsByDate()
+        Logger.success("Re-decrypted \(decrypted.count) debriefs")
     }
 
     /// Called when user scrolls near the bottom - triggers load more

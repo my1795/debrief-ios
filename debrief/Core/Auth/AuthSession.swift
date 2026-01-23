@@ -26,6 +26,7 @@ class AuthSession: ObservableObject {
     static let shared = AuthSession() // Singleton for easier access in non-view contexts
     @Published var user: User?
     @Published var isAuthenticated: Bool = false
+    @Published var isKeyReady: Bool = false  // Encryption key loaded and ready
     @Published var loadingProvider: AuthProvider? = nil
     @Published var error: Error?
 
@@ -59,15 +60,19 @@ class AuthSession: ObservableObject {
                 photoURL: authUser.photoURL
             )
             self.isAuthenticated = true
-            
+            self.isKeyReady = false  // Reset until key is loaded
+
             // Ensure encryption key is available (recovery on app launch)
             Task {
                 await EncryptionKeyManager.shared.ensureKeyAvailable(userId: authUser.id)
+                self.isKeyReady = true  // Key is now ready, trigger re-decryption
+                Logger.success("Encryption key ready")
             }
         } else {
             Logger.info("User is signed out")
             self.user = nil
             self.isAuthenticated = false
+            self.isKeyReady = false
         }
     }
     
@@ -81,6 +86,7 @@ class AuthSession: ObservableObject {
 
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
+            self.isKeyReady = true
         } catch {
             Logger.error("Sign In Error: \(error)")
             self.error = error
@@ -99,6 +105,7 @@ class AuthSession: ObservableObject {
 
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
+            self.isKeyReady = true
         } catch {
             Logger.error("Apple Sign In Error: \(error)")
             self.error = error

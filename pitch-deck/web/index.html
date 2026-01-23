@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debrief - Investor Pitch Deck</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/black.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --teal-900: #134e4a;
+            --teal-800: #115e59;
+            --teal-700: #0f766e;
+            --teal-600: #0d9488;
+            --teal-500: #14b8a6;
+            --teal-400: #2dd4bf;
+            --teal-300: #5eead4;
+            --emerald-900: #064e3b;
+            --emerald-800: #065f46;
+        }
+
+        .reveal-viewport {
+            background: linear-gradient(135deg, var(--teal-900) 0%, var(--teal-800) 50%, var(--emerald-900) 100%);
+        }
+
+        .reveal {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .reveal h1, .reveal h2, .reveal h3 {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 700;
+            text-transform: none;
+            letter-spacing: -0.02em;
+        }
+
+        .reveal h1 {
+            font-size: 3.5em;
+            background: linear-gradient(135deg, #fff 0%, var(--teal-300) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .reveal h2 {
+            font-size: 2.2em;
+            color: #fff;
+            margin-bottom: 0.5em;
+        }
+
+        .reveal h3 {
+            font-size: 1.4em;
+            color: var(--teal-300);
+            font-weight: 500;
+        }
+
+        .reveal p, .reveal li {
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 40px;
+            margin: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .glass-card-small {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 10px;
+        }
+
+        /* Metric Box */
+        .metric-box {
+            background: linear-gradient(135deg, rgba(94, 234, 212, 0.2) 0%, rgba(45, 212, 191, 0.1) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(94, 234, 212, 0.3);
+            border-radius: 20px;
+            padding: 30px 40px;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .metric-value {
+            font-size: 3em;
+            font-weight: 700;
+            color: var(--teal-300);
+            line-height: 1;
+        }
+
+        .metric-label {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* Grid Layouts */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        /* Tags/Badges */
+        .tag {
+            display: inline-block;
+            background: rgba(94, 234, 212, 0.2);
+            border: 1px solid rgba(94, 234, 212, 0.4);
+            color: var(--teal-300);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin: 4px;
+        }
+
+        .tag-red {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        .tag-green {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #86efac;
+        }
+
+        /* List Styling */
+        .reveal ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .reveal ul li {
+            position: relative;
+            padding-left: 30px;
+            margin-bottom: 16px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .reveal ul li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--teal-400);
+            font-weight: 600;
+        }
+
+        /* Subtitle */
+        .subtitle {
+            color: var(--teal-300);
+            font-size: 1.3em;
+            font-weight: 400;
+            margin-top: -10px;
+        }
+
+        /* Tagline */
+        .tagline {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+
+        /* Flow Diagram */
+        .flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-item {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px 24px;
+            font-size: 0.9em;
+            color: #fff;
+        }
+
+        .flow-arrow {
+            color: var(--teal-400);
+            font-size: 1.5em;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.75em;
+        }
+
+        .comparison-table th {
+            background: rgba(94, 234, 212, 0.2);
+            color: var(--teal-300);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .comparison-table td {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table th:first-child {
+            border-radius: 12px 0 0 0;
+        }
+
+        .comparison-table th:last-child {
+            border-radius: 0 12px 0 0;
+        }
+
+        /* Highlight column */
+        .comparison-table th.highlight {
+            background: var(--teal-500);
+            color: #fff;
+        }
+
+        .comparison-table td.highlight {
+            background: rgba(20, 184, 166, 0.15);
+            color: #fff;
+            font-weight: 500;
+        }
+
+        /* Check/X marks */
+        .check { color: #86efac; }
+        .cross { color: #fca5a5; }
+
+        /* Progress Bar */
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            height: 12px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 100px;
+            background: linear-gradient(90deg, var(--teal-400), var(--teal-300));
+        }
+
+        /* Timeline */
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            top: 30px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: rgba(94, 234, 212, 0.3);
+        }
+
+        .timeline-item {
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .timeline-dot {
+            width: 20px;
+            height: 20px;
+            background: var(--teal-400);
+            border-radius: 50%;
+            margin: 20px auto;
+            box-shadow: 0 0 20px rgba(94, 234, 212, 0.5);
+        }
+
+        .timeline-date {
+            color: var(--teal-300);
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .timeline-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85em;
+            margin-top: 8px;
+        }
+
+        /* Slide specific */
+        .slide-cover {
+            text-align: center;
+        }
+
+        .logo-text {
+            font-size: 5em;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        /* Small text */
+        .small {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Accent text */
+        .accent {
+            color: var(--teal-300);
+        }
+
+        /* Privacy badge */
+        .privacy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #86efac;
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-size: 1em;
+            font-weight: 500;
+            margin-top: 20px;
+        }
+
+        /* Number highlight */
+        .big-number {
+            font-size: 4em;
+            font-weight: 700;
+            color: var(--teal-300);
+            line-height: 1;
+        }
+
+        /* Two column text */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            text-align: left;
+        }
+
+        .col h3 {
+            margin-bottom: 20px;
+        }
+
+        /* Stats row */
+        .stats-row {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin: 40px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9em;
+            margin-top: 4px;
+        }
+
+        /* Feature list with icons */
+        .feature-list {
+            text-align: left;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(94, 234, 212, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+
+        .feature-text h4 {
+            color: #fff;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .feature-text p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9em;
+            margin: 0;
+        }
+
+        /* CTA Button */
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--teal-500), var(--teal-400));
+            color: #fff;
+            padding: 16px 40px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 1.1em;
+            text-decoration: none;
+            margin-top: 30px;
+            box-shadow: 0 4px 20px rgba(20, 184, 166, 0.4);
+        }
+
+        /* Funding allocation */
+        .funding-bar {
+            display: flex;
+            border-radius: 100px;
+            overflow: hidden;
+            height: 40px;
+            margin: 30px 0;
+        }
+
+        .funding-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        .funding-segment.engineering {
+            background: var(--teal-500);
+            width: 50%;
+        }
+
+        .funding-segment.growth {
+            background: var(--teal-600);
+            width: 30%;
+        }
+
+        .funding-segment.ops {
+            background: var(--teal-700);
+            width: 20%;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- SLIDE 1: COVER -->
+            <section class="slide-cover">
+                <h1 class="logo-text">DEBRIEF</h1>
+                <p class="subtitle">"Never forget what matters from any call"</p>
+                <p class="tagline">Post-Call Personal Memory Assistant for iOS</p>
+                <div style="margin-top: 60px;">
+                    <span class="tag">Seed Round</span>
+                    <span class="tag">iOS App</span>
+                    <span class="tag">AI-Powered</span>
+                </div>
+            </section>
+
+            <!-- SLIDE 2: PROBLEM -->
+            <section>
+                <h2>The Problem</h2>
+                <h3>Every day, critical insights are lost forever</h3>
+
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-value">8-12</div>
+                        <div class="stat-label">calls per day</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">50%</div>
+                        <div class="stat-label">forgotten in 10 min</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">90%</div>
+                        <div class="stat-label">forgotten in 24 hrs</div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="margin-top: 40px;">
+                    <p style="font-size: 1.3em; margin: 0; color: rgba(255,255,255,0.9);">
+                        "I'll take notes later" <span class="accent">→</span> <span style="color: #fca5a5;">Never happens</span>
+                    </p>
+                    <p style="margin-top: 20px; color: rgba(255,255,255,0.6);">
+                        Weak follow-ups • Lost opportunities • Damaged relationships
+                    </p>
+                </div>
+            </section>
+
+            <!-- SLIDE 3: SOLUTION -->
+            <section>
+                <h2>The Solution</h2>
+                <h3>Automatic memory capture when calls end</h3>
+
+                <div class="flow">
+                    <div class="flow-item">📞 Call Ends</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-item">🔔 Notification</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-item">🎤 Voice Memo</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-item">🤖 AI Summary</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-item">👤 Person-Linked</div>
+                </div>
+
+                <div class="grid-2" style="margin-top: 40px;">
+                    <div class="glass-card-small">
+                        <h4 style="color: var(--teal-300); margin: 0 0 16px 0;">How it works</h4>
+                        <ul style="font-size: 0.9em;">
+                            <li>Phone call ends (0 sec)</li>
+                            <li>Notification appears (2 sec)</li>
+                            <li>Record voice memo (30 sec)</li>
+                            <li>AI processes & summarizes (60 sec)</li>
+                            <li>Context ready for next call (forever)</li>
+                        </ul>
+                    </div>
+                    <div class="glass-card-small">
+                        <h4 style="color: #86efac; margin: 0 0 16px 0;">🔒 Privacy-First</h4>
+                        <p style="font-size: 0.95em; color: rgba(255,255,255,0.8); margin: 0;">
+                            <strong>No call recording. Ever.</strong><br><br>
+                            Only your post-call voice memos are captured.
+                            End-to-end encrypted with AES-256.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 4: PRODUCT -->
+            <section>
+                <h2>Product</h2>
+                <h3>Zero-friction voice-first experience</h3>
+
+                <div class="grid-2">
+                    <div class="feature-list">
+                        <div class="feature-item">
+                            <div class="feature-icon">📱</div>
+                            <div class="feature-text">
+                                <h4>CallKit Integration</h4>
+                                <p>Auto-triggers when any phone call ends</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🎤</div>
+                            <div class="feature-text">
+                                <h4>Voice-First</h4>
+                                <p>Zero typing required, just speak your thoughts</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🤖</div>
+                            <div class="feature-text">
+                                <h4>AI Processing</h4>
+                                <p>Whisper transcription + GPT-4 summaries</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">👤</div>
+                            <div class="feature-text">
+                                <h4>Person-Centric</h4>
+                                <p>Memory linked to contacts, not just calls</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🔍</div>
+                            <div class="feature-text">
+                                <h4>Semantic Search</h4>
+                                <p>Find by meaning: "budget discussions"</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: center;">
+                        <div class="glass-card" style="width: 280px; text-align: center;">
+                            <p style="color: rgba(255,255,255,0.5); margin: 0 0 10px 0; font-size: 0.8em;">APP SCREENSHOT</p>
+                            <div style="background: rgba(0,0,0,0.3); border-radius: 16px; height: 400px; display: flex; align-items: center; justify-content: center;">
+                                <p style="color: rgba(255,255,255,0.4);">[ iPhone Mockup ]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 5: MARKET -->
+            <section>
+                <h2>Market Opportunity</h2>
+                <h3>Massive and growing AI transcription market</h3>
+
+                <div class="grid-3">
+                    <div class="metric-box">
+                        <div class="metric-value">$21B</div>
+                        <div class="metric-label">TAM</div>
+                        <p class="small" style="margin-top: 8px;">Speech-to-Text API<br>(2034)</p>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value">$3.8B</div>
+                        <div class="metric-label">SAM</div>
+                        <p class="small" style="margin-top: 8px;">AI Meeting/Call Notes</p>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-value">$380M</div>
+                        <div class="metric-label">SOM</div>
+                        <p class="small" style="margin-top: 8px;">Personal Mobile<br>Phone Calls</p>
+                    </div>
+                </div>
+
+                <div class="glass-card-small" style="margin-top: 40px; text-align: center;">
+                    <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 0.9em;">
+                        AI Transcription: <span class="accent">$4.5B → $19.2B</span> (CAGR 15.6%) &nbsp;•&nbsp;
+                        AI Meeting Assistant: <span class="accent">$3.86B → $29.45B</span> (CAGR 25.62%)
+                    </p>
+                </div>
+            </section>
+
+            <!-- SLIDE 6: COMPETITION -->
+            <section>
+                <h2>Competitive Landscape</h2>
+                <h3>We own the post-call personal phone segment</h3>
+
+                <div class="glass-card" style="padding: 24px; margin-top: 30px;">
+                    <table class="comparison-table">
+                        <tr>
+                            <th>Feature</th>
+                            <th>Otter.ai</th>
+                            <th>Fireflies</th>
+                            <th>Fathom</th>
+                            <th class="highlight">Debrief</th>
+                        </tr>
+                        <tr>
+                            <td>Platform</td>
+                            <td>Web/Mobile</td>
+                            <td>Web</td>
+                            <td>Web</td>
+                            <td class="highlight">iOS Native</td>
+                        </tr>
+                        <tr>
+                            <td>Trigger</td>
+                            <td>Manual</td>
+                            <td>Calendar Bot</td>
+                            <td>Meeting Bot</td>
+                            <td class="highlight">Call-Triggered</td>
+                        </tr>
+                        <tr>
+                            <td>Focus</td>
+                            <td>Meetings</td>
+                            <td>Enterprise</td>
+                            <td>Zoom Teams</td>
+                            <td class="highlight">Phone Calls</td>
+                        </tr>
+                        <tr>
+                            <td>Records Call?</td>
+                            <td><span class="cross">Yes</span></td>
+                            <td><span class="cross">Yes</span></td>
+                            <td><span class="cross">Yes</span></td>
+                            <td class="highlight"><span class="check">No ✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>Friction</td>
+                            <td>High</td>
+                            <td>Medium</td>
+                            <td>Medium</td>
+                            <td class="highlight">Zero</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <span class="tag tag-green">Privacy-First</span>
+                    <span class="tag tag-green">Mobile-Native</span>
+                    <span class="tag tag-green">Zero Friction</span>
+                    <span class="tag tag-green">No Bots</span>
+                </div>
+            </section>
+
+            <!-- SLIDE 7: BUSINESS MODEL -->
+            <section>
+                <h2>Business Model</h2>
+                <h3>Freemium SaaS with strong upgrade path</h3>
+
+                <div class="grid-3">
+                    <div class="glass-card-small" style="text-align: center;">
+                        <p style="color: rgba(255,255,255,0.5); margin: 0; font-size: 0.8em;">FREE</p>
+                        <div style="font-size: 2.5em; font-weight: 700; color: #fff; margin: 10px 0;">$0</div>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 0.8em; margin: 0;">/month</p>
+                        <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+                        <ul style="font-size: 0.8em; text-align: left;">
+                            <li>50 debriefs/week</li>
+                            <li>30 min/week</li>
+                            <li>500MB storage</li>
+                        </ul>
+                    </div>
+                    <div class="glass-card-small" style="text-align: center; border-color: var(--teal-400);">
+                        <p style="color: var(--teal-300); margin: 0; font-size: 0.8em; font-weight: 600;">PERSONAL</p>
+                        <div style="font-size: 2.5em; font-weight: 700; color: var(--teal-300); margin: 10px 0;">$9.99</div>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 0.8em; margin: 0;">/month</p>
+                        <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+                        <ul style="font-size: 0.8em; text-align: left;">
+                            <li>Unlimited debriefs</li>
+                            <li>150 min/week</li>
+                            <li>Unlimited storage</li>
+                        </ul>
+                    </div>
+                    <div class="glass-card-small" style="text-align: center;">
+                        <p style="color: rgba(255,255,255,0.5); margin: 0; font-size: 0.8em;">PRO</p>
+                        <div style="font-size: 2.5em; font-weight: 700; color: #fff; margin: 10px 0;">$19.99</div>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 0.8em; margin: 0;">/month</p>
+                        <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+                        <ul style="font-size: 0.8em; text-align: left;">
+                            <li>Everything unlimited</li>
+                            <li>Priority AI</li>
+                            <li>Advanced search</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="glass-card-small" style="margin-top: 30px; text-align: center;">
+                    <p style="margin: 0; color: rgba(255,255,255,0.8);">
+                        <strong>Target Unit Economics:</strong> &nbsp;
+                        CAC <span class="accent">$15-25</span> &nbsp;•&nbsp;
+                        LTV <span class="accent">$150+</span> &nbsp;•&nbsp;
+                        LTV:CAC <span class="accent">6:1+</span>
+                    </p>
+                </div>
+            </section>
+
+            <!-- SLIDE 8: PLG STRATEGY -->
+            <section>
+                <h2>Growth Strategy</h2>
+                <h3>Product-Led Growth flywheel</h3>
+
+                <div class="grid-2">
+                    <div>
+                        <div class="glass-card-small" style="margin-bottom: 20px;">
+                            <h4 style="color: var(--teal-300); margin: 0 0 12px 0;">1. User Activation</h4>
+                            <p style="margin: 0; font-size: 0.9em; color: rgba(255,255,255,0.8);">Call ends → Record debrief in &lt;30 seconds</p>
+                        </div>
+                        <div class="glass-card-small" style="margin-bottom: 20px;">
+                            <h4 style="color: var(--teal-300); margin: 0 0 12px 0;">2. Habit Formation</h4>
+                            <p style="margin: 0; font-size: 0.9em; color: rgba(255,255,255,0.8);">Daily debrief routine, call-triggered engagement</p>
+                        </div>
+                        <div class="glass-card-small" style="margin-bottom: 20px;">
+                            <h4 style="color: var(--teal-300); margin: 0 0 12px 0;">3. Value Realization</h4>
+                            <p style="margin: 0; font-size: 0.9em; color: rgba(255,255,255,0.8);">Better follow-ups, stronger relationships</p>
+                        </div>
+                        <div class="glass-card-small">
+                            <h4 style="color: var(--teal-300); margin: 0 0 12px 0;">4. Organic Expansion</h4>
+                            <p style="margin: 0; font-size: 0.9em; color: rgba(255,255,255,0.8);">Hit quota → Upgrade tier</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: center;">
+                        <div class="glass-card" style="text-align: center;">
+                            <p style="color: rgba(255,255,255,0.5); margin: 0 0 10px 0; font-size: 0.9em;">AHA MOMENT</p>
+                            <div class="big-number" style="font-size: 3em;">&lt;2 min</div>
+                            <p style="color: rgba(255,255,255,0.8); margin: 15px 0 0 0;">
+                                From call end to<br>seeing AI summary
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 9: TECHNOLOGY -->
+            <section>
+                <h2>Technology Stack</h2>
+                <h3>Built for scale, security, and speed</h3>
+
+                <div class="grid-2">
+                    <div class="glass-card-small">
+                        <h4 style="color: var(--teal-300); margin: 0 0 20px 0;">📱 iOS Client</h4>
+                        <ul style="font-size: 0.9em;">
+                            <li><strong>SwiftUI + MVVM</strong> — Modern, maintainable</li>
+                            <li><strong>CallKit</strong> — Native call detection</li>
+                            <li><strong>AVFoundation</strong> — High-quality recording</li>
+                            <li><strong>Offline-First</strong> — Record anywhere, sync later</li>
+                        </ul>
+                    </div>
+                    <div class="glass-card-small">
+                        <h4 style="color: var(--teal-300); margin: 0 0 20px 0;">☁️ Backend + AI</h4>
+                        <ul style="font-size: 0.9em;">
+                            <li><strong>Firebase / GCP</strong> — Firestore, Storage, Cloud Run</li>
+                            <li><strong>OpenAI Whisper</strong> — Transcription</li>
+                            <li><strong>GPT-4</strong> — Summary + Action Items</li>
+                            <li><strong>Vector Embeddings</strong> — Semantic Search</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="privacy-badge" style="margin-top: 30px;">
+                    🔐 AES-256 End-to-End Encryption
+                </div>
+            </section>
+
+            <!-- SLIDE 10: TRACTION -->
+            <section>
+                <h2>Traction & Milestones</h2>
+                <h3>MVP complete, ready for launch</h3>
+
+                <div class="grid-2">
+                    <div class="glass-card-small">
+                        <h4 style="color: #86efac; margin: 0 0 20px 0;">✅ Completed</h4>
+                        <ul style="font-size: 0.9em;">
+                            <li>iOS MVP Complete</li>
+                            <li>CallKit Integration</li>
+                            <li>AI Pipeline (Whisper + GPT-4)</li>
+                            <li>Billing System v2</li>
+                            <li>Semantic Search</li>
+                            <li>TestFlight Beta Live</li>
+                            <li>App Store Ready</li>
+                        </ul>
+                    </div>
+                    <div class="glass-card-small">
+                        <h4 style="color: var(--teal-300); margin: 0 0 20px 0;">🎯 Roadmap</h4>
+                        <div class="timeline" style="flex-direction: column; margin: 0;">
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                                <span class="tag" style="min-width: 70px;">Q1 '26</span>
+                                <span style="color: rgba(255,255,255,0.9);">iOS App Store Launch</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                                <span class="tag" style="min-width: 70px;">Q2 '26</span>
+                                <span style="color: rgba(255,255,255,0.9);">10K MAU</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                                <span class="tag" style="min-width: 70px;">Q3 '26</span>
+                                <span style="color: rgba(255,255,255,0.9);">Android Beta</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <span class="tag" style="min-width: 70px;">Q4 '26</span>
+                                <span style="color: rgba(255,255,255,0.9);">100K MAU</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 11: THE ASK -->
+            <section>
+                <h2>The Ask</h2>
+                <h3>$1M Seed Round</h3>
+
+                <div class="funding-bar">
+                    <div class="funding-segment engineering">Engineering 50%</div>
+                    <div class="funding-segment growth">Growth 30%</div>
+                    <div class="funding-segment ops">Ops 20%</div>
+                </div>
+
+                <div class="grid-3">
+                    <div class="glass-card-small" style="text-align: center;">
+                        <div style="font-size: 2em; margin-bottom: 10px;">👨‍💻</div>
+                        <h4 style="color: var(--teal-300); margin: 0 0 10px 0;">Engineering</h4>
+                        <p style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin: 0;">
+                            iOS Dev<br>Backend Engineer<br>ML/AI Engineer
+                        </p>
+                    </div>
+                    <div class="glass-card-small" style="text-align: center;">
+                        <div style="font-size: 2em; margin-bottom: 10px;">📈</div>
+                        <h4 style="color: var(--teal-300); margin: 0 0 10px 0;">Growth</h4>
+                        <p style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin: 0;">
+                            User Acquisition<br>Content Marketing<br>Community
+                        </p>
+                    </div>
+                    <div class="glass-card-small" style="text-align: center;">
+                        <div style="font-size: 2em; margin-bottom: 10px;">⚙️</div>
+                        <h4 style="color: var(--teal-300); margin: 0 0 10px 0;">Operations</h4>
+                        <p style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin: 0;">
+                            Infrastructure<br>Legal & Compliance<br>Runway
+                        </p>
+                    </div>
+                </div>
+
+                <div class="glass-card-small" style="margin-top: 30px; text-align: center;">
+                    <p style="margin: 0; color: rgba(255,255,255,0.9);">
+                        <strong>Milestones:</strong> &nbsp;
+                        App Store <span class="accent">M1</span> →
+                        10K MAU <span class="accent">M6</span> →
+                        Android <span class="accent">M9</span> →
+                        $1M ARR <span class="accent">M18</span>
+                    </p>
+                </div>
+            </section>
+
+            <!-- SLIDE 12: WHY NOW -->
+            <section>
+                <h2>Why Now?</h2>
+                <h3>Perfect market timing</h3>
+
+                <div class="grid-2" style="margin-top: 40px;">
+                    <div>
+                        <div class="feature-item">
+                            <div class="feature-icon">💰</div>
+                            <div class="feature-text">
+                                <h4>AI Cost ↓↓↓</h4>
+                                <p>Whisper: $0.006/min (2x cheaper than 2023)</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">📱</div>
+                            <div class="feature-text">
+                                <h4>Mobile AI ↑↑↑</h4>
+                                <p>On-device ML, faster processing, better UX</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🏠</div>
+                            <div class="feature-text">
+                                <h4>Remote Work</h4>
+                                <p>Phone calls up 40% since 2020</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="feature-item">
+                            <div class="feature-icon">😫</div>
+                            <div class="feature-text">
+                                <h4>Meeting Fatigue</h4>
+                                <p>Users prefer quick calls over meetings</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🔒</div>
+                            <div class="feature-text">
+                                <h4>Privacy Awareness ↑↑↑</h4>
+                                <p>Users want control, not surveillance</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 13: CLOSING -->
+            <section class="slide-cover">
+                <h1 class="logo-text">DEBRIEF</h1>
+                <p class="subtitle" style="font-size: 1.5em; margin-top: 20px;">
+                    Remember every call.<br>
+                    Follow up better.<br>
+                    Build stronger relationships.
+                </p>
+
+                <div style="margin-top: 50px;">
+                    <span class="tag tag-green">Call-Triggered</span>
+                    <span class="tag tag-green">Privacy-First</span>
+                    <span class="tag tag-green">Mobile-Native</span>
+                    <span class="tag tag-green">AI-Powered</span>
+                    <span class="tag tag-green">PLG</span>
+                </div>
+
+                <a href="mailto:contact@debrief.app" class="cta-button" style="margin-top: 50px;">
+                    Let's Talk →
+                </a>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            controls: true,
+            progress: true,
+            center: true,
+            transition: 'slide',
+            backgroundTransition: 'fade',
+            width: 1280,
+            height: 720,
+        });
+    </script>
+</body>
+</html>
