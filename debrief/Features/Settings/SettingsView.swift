@@ -10,7 +10,10 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var authSession: AuthSession
     @StateObject private var viewModel = SettingsViewModel()
-    
+    @ObservedObject private var subscriptionState = SubscriptionState.shared
+    @State private var showPaywall = false
+    @State private var showSubscriptionWarningBeforeDelete = false
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -71,13 +74,93 @@ struct SettingsView: View {
                         
                         // Plan Section
                         SettingsSection(title: "Plan") {
-                            SettingsRow(icon: "star.circle.fill", title: "Current Plan", value: viewModel.currentPlan)
+                            // Current Plan Display
+                            HStack(spacing: 12) {
+                                Image(systemName: planIcon)
+                                    .font(.system(size: 20))
+                                    .frame(width: 24)
+                                    .foregroundStyle(planIconColor)
 
-                            // Billing History - Disabled for beta
-                            // TODO: Re-enable when billing is ready
-                            // NavigationLink(destination: UsageView(viewModel: viewModel)) {
-                            //     SettingsRow(icon: "chart.bar.fill", title: "Billing History", value: "Usage", showChevron: true)
-                            // }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Current Plan")
+                                        .foregroundStyle(.white)
+                                    if subscriptionState.isSubscribed, let expiresAt = subscriptionState.expiresAt {
+                                        if subscriptionState.willRenew {
+                                            Text("Renews \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.5))
+                                        } else {
+                                            Text("Expires \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
+                                                .font(.caption)
+                                                .foregroundStyle(.orange.opacity(0.8))
+                                        }
+                                    }
+                                }
+
+                                Spacer()
+
+                                Text(subscriptionState.currentTier.displayName)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(planIconColor)
+                            }
+                            .padding(.vertical, 12)
+
+                            // Upgrade Button (FREE tier only)
+                            if subscriptionState.currentTier == .free {
+                                Button {
+                                    showPaywall = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .foregroundStyle(AppTheme.Colors.accent)
+                                        Text("Upgrade")
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundStyle(.white.opacity(0.3))
+                                            .font(.caption)
+                                    }
+                                }
+                                .padding(.vertical, 12)
+                            }
+
+                            // Upgrade to Pro (PERSONAL tier)
+                            if subscriptionState.currentTier == .personal {
+                                Button {
+                                    showPaywall = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "bolt.circle.fill")
+                                            .foregroundStyle(.orange)
+                                        Text("Upgrade to Pro")
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundStyle(.white.opacity(0.3))
+                                            .font(.caption)
+                                    }
+                                }
+                                .padding(.vertical, 12)
+                            }
+
+                            // Manage Subscription (subscribed users only)
+                            if subscriptionState.isSubscribed {
+                                Button {
+                                    openSubscriptionManagement()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "gearshape.fill")
+                                            .foregroundStyle(Color(hex: "2DD4BF"))
+                                        Text("Manage Subscription")
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                        Image(systemName: "arrow.up.right")
+                                            .foregroundStyle(.white.opacity(0.3))
+                                            .font(.caption)
+                                    }
+                                }
+                                .padding(.vertical, 12)
+                            }
                         }
                         
                         // Preferences Section
@@ -171,7 +254,12 @@ struct SettingsView: View {
                         // Danger Zone (Delete Account Only)
                         SettingsSection(title: "Danger Zone") {
                             Button(action: {
-                                viewModel.showDeleteAccountWarning = true
+                                // Check if user has active subscription first
+                                if subscriptionState.isSubscribed {
+                                    showSubscriptionWarningBeforeDelete = true
+                                } else {
+                                    viewModel.showDeleteAccountWarning = true
+                                }
                             }) {
                                 HStack {
                                     Image(systemName: "exclamationmark.triangle.fill")
@@ -283,7 +371,125 @@ struct SettingsView: View {
                     }
                 }
             }
+            // Paywall Sheet
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+            }
+            // Subscription Warning Before Delete
+            .sheet(isPresented: $showSubscriptionWarningBeforeDelete) {
+                subscriptionWarningSheet
+            }
+            // Refresh subscription status in background when Settings appears
+            .task(priority: .background) {
+                do {
+                    try await SubscriptionService.shared.refreshSubscriptionStatus()
+                } catch {
+                    // Silent fail - don't bother user with refresh errors
+                    Logger.debug("Background subscription refresh failed: \(error)")
+                }
+            }
         }
+    }
+
+    // MARK: - Helpers
+
+    private var planIcon: String {
+        switch subscriptionState.currentTier {
+        case .free: return "star.circle"
+        case .personal: return "star.circle.fill"
+        case .pro: return "bolt.circle.fill"
+        }
+    }
+
+    private var planIconColor: Color {
+        switch subscriptionState.currentTier {
+        case .free: return Color(hex: "2DD4BF") // teal-400
+        case .personal: return Color(hex: "2DD4BF") // teal-400
+        case .pro: return .orange
+        }
+    }
+
+    private func openSubscriptionManagement() {
+        if let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    // MARK: - Subscription Warning Sheet
+
+    private var subscriptionWarningSheet: some View {
+        ZStack {
+            Color(hex: "1F2937").ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Image(systemName: "creditcard.trianglebadge.exclamationmark")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.orange)
+
+                Text("Active Subscription")
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(.white)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("⚠️ You have an active \(subscriptionState.currentTier.displayName) subscription.")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Text("Deleting your account will NOT automatically cancel your subscription. Apple will continue to charge you.")
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.8))
+
+                    Text("Please cancel your subscription first before deleting your account.")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+                .padding()
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                Spacer()
+
+                VStack(spacing: 12) {
+                    // Cancel Subscription Button (Primary)
+                    Button(action: {
+                        showSubscriptionWarningBeforeDelete = false
+                        openSubscriptionManagement()
+                    }) {
+                        HStack {
+                            Image(systemName: "xmark.circle.fill")
+                            Text("Cancel Subscription First")
+                        }
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.orange)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    // Delete Anyway Button (Secondary)
+                    Button(action: {
+                        showSubscriptionWarningBeforeDelete = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            viewModel.showDeleteAccountWarning = true
+                        }
+                    }) {
+                        Text("Delete Anyway (Keep Paying)")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                    .padding(.top, 8)
+
+                    // Go Back Button
+                    Button("Go Back") {
+                        showSubscriptionWarningBeforeDelete = false
+                    }
+                    .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .padding(24)
+        }
+        .modifier(PresentationDetentsModifier())
     }
 }
 

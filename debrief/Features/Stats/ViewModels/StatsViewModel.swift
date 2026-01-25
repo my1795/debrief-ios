@@ -33,6 +33,22 @@ struct CalculatedStatsCache: Codable {
     }
 }
 
+// MARK: - Cached Stats Week Data (1-hour TTL)
+/// Cache for Weekly Stats (Sunday-Sunday) - separate from Billing Week
+struct StatsWeekCache: Codable {
+    let debriefCount: Int
+    let totalSeconds: Int
+    let actionItemsCount: Int
+    let uniqueContactsCount: Int
+    let cachedAt: Date
+    let weekStart: Date
+
+    var isValid: Bool {
+        let oneHour: TimeInterval = 60 * 60
+        return Date().timeIntervalSince(cachedAt) < oneHour
+    }
+}
+
 @MainActor
 class StatsViewModel: ObservableObject {
     @Published var stats: [StatsDisplayData] = []
@@ -58,9 +74,11 @@ class StatsViewModel: ObservableObject {
     private let statsService: StatsServiceProtocol
     private var cancellables = Set<AnyCancellable>()
     private var debriefsListenerCancellable: AnyCancellable?
+    private var statsWeekListenerCancellable: AnyCancellable?
 
     private var currentUserId: String?
     private let cacheKey = "calculated_stats_cache"
+    private let statsWeekCacheKey = "stats_week_cache"
 
     init(statsService: StatsServiceProtocol = StatsService()) {
         self.statsService = statsService
@@ -69,12 +87,14 @@ class StatsViewModel: ObservableObject {
     deinit {
         cancellables.forEach { $0.cancel() }
         debriefsListenerCancellable?.cancel()
+        statsWeekListenerCancellable?.cancel()
     }
 
     // MARK: - Snapshot Listener Based Loading
 
-    /// Starts observing UserPlan with real-time updates.
-    /// ALL stats are derived from UserPlan - no separate debrief fetches needed.
+    /// Starts observing data for Stats screen.
+    /// - UserPlan listener: For Quota Usage (Billing Week)
+    /// - Debriefs listener: For Weekly Stats (Stats Week: Sunday-Sunday)
     func startObserving(userId: String) {
         guard currentUserId != userId else { return } // Already observing
         currentUserId = userId
@@ -89,7 +109,7 @@ class StatsViewModel: ObservableObject {
         cancellables.forEach { $0.cancel() }
         cancellables.removeAll()
 
-        // Single snapshot listener for UserPlan - provides ALL stats
+        // 1. UserPlan listener - for Quota Usage (BILLING WEEK)
         FirestoreService.shared.observeUserPlan(userId: userId)
             .receive(on: DispatchQueue.main)
             .sink(
@@ -98,52 +118,135 @@ class StatsViewModel: ObservableObject {
                         Logger.error("UserPlan listener failed: \(err)")
                         self?.error = AppError.from(err)
                         self?.quotaError = true
-                        self?.weeklyStatsError = true
-                        self?.quickStatsError = true
                     }
-                    self?.isLoading = false
                     self?.isLoadingQuota = false
-                    self?.isLoadingWeeklyStats = false
-                    self?.isLoadingQuickStats = false
                 },
                 receiveValue: { [weak self] plan in
                     guard let self = self else { return }
 
-                    Logger.sync("Real-time UserPlan update received")
+                    Logger.sync("Real-time UserPlan update received (Billing Week quota)")
 
                     self.userPlan = plan
-                    self.updateAllStatsFromPlan(plan)
+                    self.updateQuotaFromPlan(plan)  // Only update Quota (Billing Week)
 
-                    self.isLoading = false
                     self.isLoadingQuota = false
-                    self.isLoadingWeeklyStats = false
-                    self.isLoadingQuickStats = false
                     self.quotaError = false
-                    self.weeklyStatsError = false
-                    self.quickStatsError = false
                 }
             )
             .store(in: &cancellables)
 
-        // Top contacts still needs debrief fetch (with cache)
+        // 2. Weekly Stats from Debriefs query (STATS WEEK: Sunday-Sunday)
+        loadStatsWeekData(userId: userId)
+
+        // 3. Top contacts (with cache)
         loadTopContactsWithCache(userId: userId)
 
-        // Calculated stats (mostActiveDay, longestStreak) with 6h cache
+        // 4. Calculated stats (mostActiveDay, longestStreak) with 6h cache
         loadCalculatedStatsWithCache(userId: userId)
     }
 
-    /// Updates ALL stats from UserPlan data (no debrief fetch needed)
-    private func updateAllStatsFromPlan(_ plan: UserPlan) {
-        // 1. Quota
+    // MARK: - Quota from Billing Week (UserPlan)
+
+    /// Updates only Quota Usage from UserPlan (Billing Week data)
+    private func updateQuotaFromPlan(_ plan: UserPlan) {
         let userQuota = plan.toUserQuota()
         self.quota = mapToStatsQuota(userQuota)
+        Logger.data("Quota updated from Billing Week: \(plan.weeklyUsage.debriefCount) debriefs, \(plan.usedMinutes) min")
+    }
 
-        // 2. Widget Stats (from weeklyUsage)
-        let debriefCount = plan.weeklyUsage.debriefCount
-        let totalSeconds = plan.weeklyUsage.totalSeconds
-        let actionItemsCount = plan.weeklyActionItemsCount
-        let uniqueContactsCount = plan.weeklyUniqueContactsCount
+    // MARK: - Weekly Stats from Stats Week (Debriefs Query)
 
+    /// Loads Weekly Stats from debriefs collection using Stats Week (Sunday-Sunday)
+    /// Uses 1-hour cache TTL
+    private func loadStatsWeekData(userId: String) {
+        let (weekStart, weekEnd) = statsWeekProvider.currentWeekRange()
+
+        // 1. Try cache first
+        if let cached = loadStatsWeekCache(userId: userId, weekStart: weekStart), cached.isValid {
+            Logger.data("Using cached Stats Week data (age: \(Int(Date().timeIntervalSince(cached.cachedAt) / 60)) min)")
+            updateWeeklyStatsUI(
+                debriefCount: cached.debriefCount,
+                totalSeconds: cached.totalSeconds,
+                actionItemsCount: cached.actionItemsCount,
+                uniqueContactsCount: cached.uniqueContactsCount
+            )
+            isLoadingWeeklyStats = false
+            isLoadingQuickStats = false
+            isLoading = false
+            weeklyStatsError = false
+            quickStatsError = false
+            return
+        }
+
+        // 2. Start snapshot listener for Stats Week debriefs
+        statsWeekListenerCancellable?.cancel()
+
+        var filters = DebriefFilters()
+        filters.dateOption = .custom
+        filters.customStartDate = weekStart
+        filters.customEndDate = weekEnd
+
+        Logger.sync("Starting Stats Week listener (Sun-Sun): \(weekStart) to \(weekEnd)")
+
+        statsWeekListenerCancellable = FirestoreService.shared.observeDebriefs(
+            userId: userId,
+            filters: filters,
+            limit: 500
+        )
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    Logger.error("Stats Week listener failed: \(error)")
+                    self?.weeklyStatsError = true
+                    self?.quickStatsError = true
+                }
+                self?.isLoadingWeeklyStats = false
+                self?.isLoadingQuickStats = false
+                self?.isLoading = false
+            },
+            receiveValue: { [weak self] result in
+                guard let self = self else { return }
+
+                // Aggregate stats from debriefs
+                let debriefs = result.debriefs
+                let debriefCount = debriefs.count
+                let totalSeconds = debriefs.reduce(0) { $0 + Int($1.duration) }
+                // Use pre-computed actionItemsCount if available, fallback to counting array
+                let actionItemsCount = debriefs.reduce(0) { $0 + ($1.actionItemsCount ?? $1.actionItems?.count ?? 0) }
+                let uniqueContacts = Set(debriefs.compactMap { $0.contactId.isEmpty ? nil : $0.contactId })
+                let uniqueContactsCount = uniqueContacts.count
+
+                self.updateWeeklyStatsUI(
+                    debriefCount: debriefCount,
+                    totalSeconds: totalSeconds,
+                    actionItemsCount: actionItemsCount,
+                    uniqueContactsCount: uniqueContactsCount
+                )
+
+                // Save to cache
+                self.saveStatsWeekCache(
+                    userId: userId,
+                    debriefCount: debriefCount,
+                    totalSeconds: totalSeconds,
+                    actionItemsCount: actionItemsCount,
+                    uniqueContactsCount: uniqueContactsCount,
+                    weekStart: weekStart
+                )
+
+                self.isLoadingWeeklyStats = false
+                self.isLoadingQuickStats = false
+                self.isLoading = false
+                self.weeklyStatsError = false
+                self.quickStatsError = false
+
+                Logger.success("Stats Week updated (Sun-Sun): \(debriefCount) debriefs, \(totalSeconds)s, \(actionItemsCount) actions, \(uniqueContactsCount) contacts (cache: \(result.isFromCache))")
+            }
+        )
+    }
+
+    /// Updates Weekly Stats UI (4 cards) - Stats Week data
+    private func updateWeeklyStatsUI(debriefCount: Int, totalSeconds: Int, actionItemsCount: Int, uniqueContactsCount: Int) {
         let durationValue: String
         if totalSeconds < 60 {
             durationValue = "\(totalSeconds) sec"
@@ -158,7 +261,7 @@ class StatsViewModel: ObservableObject {
             StatsDisplayData(title: "Active Contacts", value: "\(uniqueContactsCount)", subValue: nil, isPositive: nil, icon: "person.2.fill")
         ]
 
-        // 3. Overview Stats (from weeklyUsage + calculated stats)
+        // Update overview
         let totalMinutes = Int(ceil(Double(totalSeconds) / 60.0))
         let avgSeconds = debriefCount > 0 ? Double(totalSeconds) / Double(debriefCount) : 0.0
 
@@ -168,11 +271,45 @@ class StatsViewModel: ObservableObject {
             totalActionItems: actionItemsCount,
             totalContacts: uniqueContactsCount,
             avgDebriefDuration: avgSeconds,
-            mostActiveDay: self.mostActiveDay,  // From calculated stats
-            longestStreak: self.longestStreak   // From calculated stats
+            mostActiveDay: self.mostActiveDay,
+            longestStreak: self.longestStreak
+        )
+    }
+
+    // MARK: - Stats Week Cache (1-hour TTL)
+
+    private func loadStatsWeekCache(userId: String, weekStart: Date) -> StatsWeekCache? {
+        let key = "\(statsWeekCacheKey)_\(userId)"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(StatsWeekCache.self, from: data) else {
+            return nil
+        }
+
+        // Check if cache is for the same week
+        let calendar = Calendar.current
+        guard calendar.isDate(cache.weekStart, inSameDayAs: weekStart) else {
+            Logger.data("Stats Week cache is for different week, invalidating")
+            return nil
+        }
+
+        return cache
+    }
+
+    private func saveStatsWeekCache(userId: String, debriefCount: Int, totalSeconds: Int, actionItemsCount: Int, uniqueContactsCount: Int, weekStart: Date) {
+        let cache = StatsWeekCache(
+            debriefCount: debriefCount,
+            totalSeconds: totalSeconds,
+            actionItemsCount: actionItemsCount,
+            uniqueContactsCount: uniqueContactsCount,
+            cachedAt: Date(),
+            weekStart: weekStart
         )
 
-        Logger.success("All stats updated from UserPlan (offline-ready)")
+        if let data = try? JSONEncoder().encode(cache) {
+            let key = "\(statsWeekCacheKey)_\(userId)"
+            UserDefaults.standard.set(data, forKey: key)
+            Logger.data("Saved Stats Week cache (1h TTL)")
+        }
     }
 
     // MARK: - Calculated Stats with 6-Hour Cache

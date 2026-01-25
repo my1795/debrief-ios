@@ -10,7 +10,9 @@ import SwiftUI
 struct RecordView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = RecordViewModel()
-    
+    @State private var showPaywall = false
+    @State private var showEducation = false
+
     var body: some View {
         ZStack {
             // Background Gradient
@@ -45,8 +47,16 @@ struct RecordView: View {
     
     var recordingView: some View {
         VStack {
+            // Info Button at top-right
+            HStack {
+                Spacer()
+                InfoButton(topic: EducationTopics.record, showEducation: $showEducation)
+                    .padding(.trailing, 16)
+                    .padding(.top, 16)
+            }
+
             Spacer()
-            
+
             // Pulsing Recording Animation
             RecordingPulseView()
                 .padding(.bottom, 32)
@@ -253,8 +263,7 @@ struct RecordView: View {
 
             VStack(spacing: 12) {
                 Button {
-                    // TODO: Navigate to upgrade screen
-                    dismiss()
+                    showPaywall = true
                 } label: {
                     HStack {
                         Image(systemName: "arrow.up.circle.fill")
@@ -271,7 +280,7 @@ struct RecordView: View {
                 Button {
                     dismiss()
                 } label: {
-                    Text("Close")
+                    Text("Maybe Later")
                         .font(.headline)
                         .foregroundColor(.white.opacity(0.7))
                         .padding()
@@ -279,6 +288,12 @@ struct RecordView: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 32)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: reason) {
+                // On successful purchase, dismiss the record view
+                dismiss()
+            }
         }
     }
 }

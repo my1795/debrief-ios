@@ -9,7 +9,9 @@ import SwiftUI
 
 struct StatsOverviewView: View {
     @ObservedObject var viewModel: StatsViewModel
+    @ObservedObject private var subscriptionState = SubscriptionState.shared
     @State private var showQuotaInfo = false
+    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -24,7 +26,7 @@ struct StatsOverviewView: View {
                         .foregroundStyle(.white)
                 }
                 
-                Text(viewModel.quota.tier)
+                Text(subscriptionState.currentTier.displayName)
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
                 
@@ -158,6 +160,13 @@ struct StatsOverviewView: View {
 
                     Spacer()
 
+                    // Warning indicator for high usage (80%+)
+                    if subscriptionState.currentTier == .free && subscriptionState.highestUsagePercent >= 80 {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
                     if viewModel.quotaError {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)
@@ -229,6 +238,39 @@ struct StatsOverviewView: View {
                             subLabel: "lifetime"
                         )
                     }
+
+                    // Upgrade prompt for FREE tier with high usage (80%+)
+                    if subscriptionState.currentTier == .free && subscriptionState.highestUsagePercent >= 80 {
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.subheadline)
+                                Text("Upgrade for unlimited")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.orange.opacity(0.3), Color.red.opacity(0.2)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+                            )
+                        }
+                    }
                 }
             }
             .padding()
@@ -236,6 +278,9 @@ struct StatsOverviewView: View {
             .background(Material.ultraThin)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1), lineWidth: 1))
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+            }
             
             // MARK: - Top Contacts
             VStack(alignment: .leading, spacing: 16) {

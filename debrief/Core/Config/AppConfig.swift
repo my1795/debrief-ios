@@ -48,7 +48,12 @@ struct AppConfig {
     var apiBaseURL: String {
         switch currentEnvironment {
         case .local:
+            #if targetEnvironment(simulator)
             return "http://localhost:8080/v1"
+            #else
+            // Physical device - use ngrok URL for local backend testing
+            return "https://51ebe6bf17d8.ngrok-free.app/v1"
+            #endif
         case .stage:
             return "https://debrief-service-306744525686.us-central1.run.app/v1"
         case .production:
@@ -74,6 +79,15 @@ struct AppConfig {
     /// Whether verbose logging should be enabled (LOCAL only, not stage or production)
     var isVerboseLoggingEnabled: Bool {
         currentEnvironment == .local
+    }
+
+    // MARK: - RevenueCat
+
+    /// RevenueCat API key (Apple App Store)
+    /// Using production key for all environments since bundle ID is com.musoft.debrief
+    /// Sandbox vs Production is determined by App Store environment, not API key
+    var revenueCatAPIKey: String {
+        return "appl_ebnVzfhnHLksbyxoimHhWyEEEkz"  // Debrief iOS (production project)
     }
 
     // MARK: - Web URLs
@@ -107,8 +121,10 @@ struct AppConfig {
     var minimumSearchQueryLength: Int { 3 }
 
     private init() {
-        // Log current environment on init
+        // Log current environment on init (using print because Logger depends on AppConfig)
+        #if DEBUG
         print("🌍 [AppConfig] Environment: \(currentEnvironment.displayName)")
         print("📡 [AppConfig] API Base URL: \(apiBaseURL)")
+        #endif
     }
 }

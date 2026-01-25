@@ -67,6 +67,14 @@ class AuthSession: ObservableObject {
                 await EncryptionKeyManager.shared.ensureKeyAvailable(userId: authUser.id)
                 self.isKeyReady = true  // Key is now ready, trigger re-decryption
                 Logger.success("Encryption key ready")
+
+                // Sync RevenueCat on app launch (existing user session)
+                do {
+                    try await SubscriptionService.shared.login(userID: authUser.id)
+                    Logger.success("RevenueCat synced on app launch")
+                } catch {
+                    Logger.error("RevenueCat sync failed: \(error)")
+                }
             }
         } else {
             Logger.info("User is signed out")
@@ -87,6 +95,9 @@ class AuthSession: ObservableObject {
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
             self.isKeyReady = true
+
+            // Sync RevenueCat with Firebase UID
+            try await SubscriptionService.shared.login(userID: authUser.id)
         } catch {
             Logger.error("Sign In Error: \(error)")
             self.error = error
@@ -106,6 +117,9 @@ class AuthSession: ObservableObject {
             // Fetch and store encryption key after successful login
             try await EncryptionKeyManager.shared.fetchAndStoreKey(userId: authUser.id)
             self.isKeyReady = true
+
+            // Sync RevenueCat with Firebase UID
+            try await SubscriptionService.shared.login(userID: authUser.id)
         } catch {
             Logger.error("Apple Sign In Error: \(error)")
             self.error = error
@@ -117,11 +131,16 @@ class AuthSession: ObservableObject {
     func signOut() {
         // Get user ID before signing out for key cleanup
         let userId = user?.id
-        
+
         do {
             // Clear encryption key first
             EncryptionKeyManager.shared.clearKey(userId: userId)
-            
+
+            // Logout from RevenueCat
+            Task {
+                try? await SubscriptionService.shared.logout()
+            }
+
             try authService.signOut()
         } catch {
             Logger.error("Sign Out Error: \(error)")

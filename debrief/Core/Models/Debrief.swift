@@ -25,6 +25,7 @@ struct Debrief: Identifiable, Codable {
     let summary: String?
     let transcript: String?
     let actionItems: [String]?
+    let actionItemsCount: Int?  // Pre-computed count for faster stats aggregation
     let audioUrl: String?
     let audioStoragePath: String?
     let encrypted: Bool
@@ -53,7 +54,7 @@ struct Debrief: Identifiable, Codable {
     // MARK: - Coding Keys
     enum CodingKeys: String, CodingKey {
         case id = "debriefId"
-        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, audioUrl, audioStoragePath, encrypted, encryptionVersion, phoneNumber, email
+        case userId, contactId, contactName, occurredAt, duration, status, summary, transcript, actionItems, actionItemsCount, audioUrl, audioStoragePath, encrypted, encryptionVersion, phoneNumber, email
         case retryCount, nextRetryAt, errorMessage
         case audioDurationSec // Legacy/Alternate key from backend
     }
@@ -73,6 +74,7 @@ struct Debrief: Identifiable, Codable {
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         transcript = try container.decodeIfPresent(String.self, forKey: .transcript)
         actionItems = try container.decodeIfPresent([String].self, forKey: .actionItems)
+        actionItemsCount = try container.decodeIfPresent(Int.self, forKey: .actionItemsCount)
         audioUrl = try container.decodeIfPresent(String.self, forKey: .audioUrl)
         audioStoragePath = try container.decodeIfPresent(String.self, forKey: .audioStoragePath)
         encryptionVersion = try container.decodeIfPresent(String.self, forKey: .encryptionVersion)
@@ -115,6 +117,7 @@ struct Debrief: Identifiable, Codable {
         try container.encodeIfPresent(summary, forKey: .summary)
         try container.encodeIfPresent(transcript, forKey: .transcript)
         try container.encodeIfPresent(actionItems, forKey: .actionItems)
+        try container.encodeIfPresent(actionItemsCount, forKey: .actionItemsCount)
         try container.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try container.encodeIfPresent(audioStoragePath, forKey: .audioStoragePath)
         try container.encode(encrypted, forKey: .encrypted)
@@ -129,7 +132,7 @@ struct Debrief: Identifiable, Codable {
     }
     
     // MARK: - Manual Initializer
-    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, encryptionVersion: String? = nil, phoneNumber: String? = nil, email: String? = nil, retryCount: Int = 0, nextRetryAt: Date? = nil, errorMessage: String? = nil) {
+    init(id: String, userId: String, contactId: String, contactName: String, occurredAt: Date, duration: TimeInterval, status: DebriefStatus, summary: String?, transcript: String?, actionItems: [String]?, actionItemsCount: Int? = nil, audioUrl: String?, audioStoragePath: String? = nil, encrypted: Bool = false, encryptionVersion: String? = nil, phoneNumber: String? = nil, email: String? = nil, retryCount: Int = 0, nextRetryAt: Date? = nil, errorMessage: String? = nil) {
         self.id = id
         self.userId = userId
         self.contactId = contactId
@@ -140,6 +143,7 @@ struct Debrief: Identifiable, Codable {
         self.summary = summary
         self.transcript = transcript
         self.actionItems = actionItems
+        self.actionItemsCount = actionItemsCount
         self.audioUrl = audioUrl
         self.audioStoragePath = audioStoragePath
         self.encryptionVersion = encryptionVersion

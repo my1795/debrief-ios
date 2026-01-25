@@ -32,8 +32,8 @@ agvtool new-marketing-version 1.2.0
 
 | Config | Bundle ID | Environment | Firebase |
 |--------|-----------|-------------|----------|
-| Debug | `com.musoft.debrief.stage` | local | GoogleService-Dev |
-| Stage | `com.musoft.debrief.stage` | stage | GoogleService-Dev |
+| Debug | `com.musoft.debrief` | local | GoogleService-Dev |
+| Stage | `com.musoft.debrief` | stage | GoogleService-Dev |
 | Release | `com.musoft.debrief` | production | GoogleService-Prod |
 
 ---

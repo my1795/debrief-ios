@@ -262,7 +262,8 @@ extension UserPlan {
     var storageLimitMB: Int {
         switch tier.uppercased() {
         case "FREE": return 500
-        case "PERSONAL", "PRO": return Int.max
+        case "PERSONAL": return 5000  // 5GB - matches backend
+        case "PRO": return Int.max
         default: return 500
         }
     }
@@ -317,7 +318,8 @@ enum BillingConstants {
         var storageLimitMB: Int {
             switch self {
             case .free: return 500
-            case .personal, .pro: return Int.max
+            case .personal: return 5000  // 5GB - matches backend
+            case .pro: return Int.max
             }
         }
     }

@@ -9,7 +9,8 @@ import SwiftUI
 
 struct ContactsView: View {
     @StateObject private var viewModel = ContactsViewModel()
-    
+    @State private var showEducation = false
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -24,6 +25,7 @@ struct ContactsView: View {
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.white)
                         Spacer()
+                        InfoButton(topic: EducationTopics.contacts, showEducation: $showEducation)
                     }
                     .padding(.horizontal)
                     .padding(.top, 16)

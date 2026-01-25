@@ -10,6 +10,7 @@ import SwiftUI
 struct StatsView: View {
     @StateObject private var viewModel = StatsViewModel()
     @State private var selectedTab: StatsTab = .overview
+    @State private var showEducation = false
 
     enum StatsTab: String, CaseIterable {
         case overview = "Overview"
@@ -48,6 +49,7 @@ struct StatsView: View {
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundStyle(.white)
                             Spacer()
+                            InfoButton(topic: EducationTopics.stats, showEducation: $showEducation)
                         }
                         .padding(.top, 16)
                         

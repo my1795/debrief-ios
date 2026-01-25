@@ -11,6 +11,7 @@ struct DebriefFeedView: View {
     @StateObject private var viewModel = TimelineViewModel()
     @State private var showFilters = false
     @State private var showSearch = false
+    @State private var showEducation = false
     let userId: String // Passed from parent
     
     // For Phase 1: Search is visual or basic local filter (placeholder)
@@ -82,6 +83,11 @@ struct DebriefFeedView: View {
                                         }
                                     )
                             }
+
+                            InfoButton(topic: EducationTopics.timeline, showEducation: $showEducation)
+                                .padding(10)
+                                .background(Color.white.opacity(0.1))
+                                .clipShape(Circle())
                         }
                         .padding(.horizontal)
                         

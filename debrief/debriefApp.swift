@@ -2,16 +2,25 @@ import SwiftUI
 import SwiftData
 import FirebaseCore
 import GoogleSignIn
+import RevenueCat
 
 @main
 struct debriefApp: App {
-    
+
     init() {
         configureFirebase()
-        
+        configureRevenueCat()
+
         // Initialize Background Services
         _ = CallObserverService.shared
         NotificationService.shared.requestAuthorization()
+    }
+
+    /// Configure RevenueCat SDK
+    private func configureRevenueCat() {
+        // Configure with anonymous user initially
+        // Will login with Firebase UID after auth
+        SubscriptionService.shared.configure(appUserID: nil)
     }
     
     /// Configure Firebase with environment-specific config file
