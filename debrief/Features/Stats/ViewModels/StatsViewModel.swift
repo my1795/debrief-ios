@@ -157,28 +157,23 @@ class StatsViewModel: ObservableObject {
     // MARK: - Weekly Stats from Stats Week (Debriefs Query)
 
     /// Loads Weekly Stats from debriefs collection using Stats Week (Sunday-Sunday)
-    /// Uses 1-hour cache TTL
+    /// Uses 1-hour cache TTL for instant display, but always starts listener for live updates
     private func loadStatsWeekData(userId: String) {
         let (weekStart, weekEnd) = statsWeekProvider.currentWeekRange()
 
-        // 1. Try cache first
+        // 1. Show cache immediately for fast UI (but don't return - always start listener)
         if let cached = loadStatsWeekCache(userId: userId, weekStart: weekStart), cached.isValid {
-            Logger.data("Using cached Stats Week data (age: \(Int(Date().timeIntervalSince(cached.cachedAt) / 60)) min)")
+            Logger.data("Showing cached Stats Week data (age: \(Int(Date().timeIntervalSince(cached.cachedAt) / 60)) min) - actions: \(cached.actionItemsCount)")
             updateWeeklyStatsUI(
                 debriefCount: cached.debriefCount,
                 totalSeconds: cached.totalSeconds,
                 actionItemsCount: cached.actionItemsCount,
                 uniqueContactsCount: cached.uniqueContactsCount
             )
-            isLoadingWeeklyStats = false
-            isLoadingQuickStats = false
-            isLoading = false
-            weeklyStatsError = false
-            quickStatsError = false
-            return
+            // Don't set isLoading=false yet - listener will update with fresh data
         }
 
-        // 2. Start snapshot listener for Stats Week debriefs
+        // 2. ALWAYS start snapshot listener for live updates (even if cache exists)
         statsWeekListenerCancellable?.cancel()
 
         var filters = DebriefFilters()
@@ -214,6 +209,12 @@ class StatsViewModel: ObservableObject {
                 let totalSeconds = debriefs.reduce(0) { $0 + Int($1.duration) }
                 // Use pre-computed actionItemsCount if available, fallback to counting array
                 let actionItemsCount = debriefs.reduce(0) { $0 + ($1.actionItemsCount ?? $1.actionItems?.count ?? 0) }
+
+                // DEBUG: Log action items detail
+                Logger.debug("📊 Action Items Debug: total=\(actionItemsCount)")
+                for (i, d) in debriefs.prefix(3).enumerated() {
+                    Logger.debug("  Debrief[\(i)]: actionItemsCount=\(d.actionItemsCount ?? -1), actionItems.count=\(d.actionItems?.count ?? 0)")
+                }
                 let uniqueContacts = Set(debriefs.compactMap { $0.contactId.isEmpty ? nil : $0.contactId })
                 let uniqueContactsCount = uniqueContacts.count
 

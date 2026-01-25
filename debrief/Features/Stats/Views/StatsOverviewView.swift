@@ -13,6 +13,30 @@ struct StatsOverviewView: View {
     @State private var showQuotaInfo = false
     @State private var showPaywall = false
 
+    // MARK: - Tier-based UI
+
+    private var tierSubtitle: String {
+        switch subscriptionState.currentTier {
+        case .free:
+            return "Limited access"
+        case .personal:
+            return "Your personal memory"
+        case .pro:
+            return "Unlimited access"
+        }
+    }
+
+    private var tierGradientColors: [Color] {
+        switch subscriptionState.currentTier {
+        case .free:
+            return [Color(hex: "0891B2"), Color(hex: "06B6D4")]  // Cyan
+        case .personal:
+            return [Color(hex: "7C3AED"), Color(hex: "8B5CF6")]  // Purple
+        case .pro:
+            return [Color(hex: "F59E0B"), Color(hex: "FBBF24")]  // Amber/Gold
+        }
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // MARK: - Current Plan Card
@@ -29,8 +53,8 @@ struct StatsOverviewView: View {
                 Text(subscriptionState.currentTier.displayName)
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
-                
-                Text("Limited access")
+
+                Text(tierSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.9))
             }
@@ -38,7 +62,7 @@ struct StatsOverviewView: View {
             .padding(20)
             .background(
                 LinearGradient(
-                    colors: [Color(hex: "0891B2"), Color(hex: "06B6D4")], // cyan-600 to cyan-500 (Free/Starter look)
+                    colors: tierGradientColors,
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
