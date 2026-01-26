@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import RevenueCat
 
 struct SettingsView: View {
     @ObservedObject var authSession: AuthSession
@@ -13,6 +14,22 @@ struct SettingsView: View {
     @ObservedObject private var subscriptionState = SubscriptionState.shared
     @State private var showPaywall = false
     @State private var showSubscriptionWarningBeforeDelete = false
+    @State private var isRestoringPurchases = false
+    @State private var restoreAlert: RestoreAlertType?
+
+    enum RestoreAlertType: Identifiable {
+        case success
+        case noPurchases
+        case error(String)
+
+        var id: String {
+            switch self {
+            case .success: return "success"
+            case .noPurchases: return "noPurchases"
+            case .error: return "error"
+            }
+        }
+    }
 
     var body: some View {
         NavigationView {
@@ -140,6 +157,31 @@ struct SettingsView: View {
                                             .font(.caption)
                                     }
                                 }
+                                .padding(.vertical, 12)
+                            }
+
+                            // Restore Purchases (FREE and PERSONAL only)
+                            if subscriptionState.currentTier != .pro {
+                                Button {
+                                    Task {
+                                        await restorePurchases()
+                                    }
+                                } label: {
+                                    HStack {
+                                        if isRestoringPurchases {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                .scaleEffect(0.8)
+                                        } else {
+                                            Image(systemName: "arrow.clockwise.circle.fill")
+                                                .foregroundStyle(Color(hex: "94A3B8"))
+                                        }
+                                        Text("Restore Purchases")
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                    }
+                                }
+                                .disabled(isRestoringPurchases)
                                 .padding(.vertical, 12)
                             }
 
@@ -388,6 +430,29 @@ struct SettingsView: View {
                     Logger.debug("Background subscription refresh failed: \(error)")
                 }
             }
+            // Restore Purchases Alert
+            .alert(item: $restoreAlert) { alertType in
+                switch alertType {
+                case .success:
+                    return Alert(
+                        title: Text("Purchases Restored"),
+                        message: Text("Your \(subscriptionState.currentTier.displayName) subscription has been restored."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                case .noPurchases:
+                    return Alert(
+                        title: Text("No Purchases Found"),
+                        message: Text("We couldn't find any previous purchases for this Apple ID."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                case .error(let message):
+                    return Alert(
+                        title: Text("Restore Failed"),
+                        message: Text(message),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            }
         }
     }
 
@@ -412,6 +477,24 @@ struct SettingsView: View {
     private func openSubscriptionManagement() {
         if let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") {
             UIApplication.shared.open(url)
+        }
+    }
+
+    private func restorePurchases() async {
+        isRestoringPurchases = true
+        defer { isRestoringPurchases = false }
+
+        do {
+            let customerInfo = try await SubscriptionService.shared.restorePurchases()
+
+            if customerInfo.entitlements.active.isEmpty {
+                restoreAlert = .noPurchases
+            } else {
+                restoreAlert = .success
+            }
+        } catch {
+            restoreAlert = .error(error.localizedDescription)
+            Logger.error("Restore failed: \(error)")
         }
     }
 
