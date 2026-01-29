@@ -251,42 +251,59 @@ struct SettingsView: View {
                                 }
 
                                 Button(action: {
-                                    viewModel.showClearConfirmation = true
+                                    viewModel.requestFreeSpace()
                                 }) {
-                                    HStack {
+                                    HStack(spacing: 8) {
                                         if viewModel.isClearingVoiceData {
                                             ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "FECACA")))
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                                 .scaleEffect(0.7)
                                             Text("Freeing Space...")
+                                                .foregroundStyle(.white)
                                         } else {
+                                            Image(systemName: "trash.fill")
+                                                .font(.caption)
                                             Text("Free Voice Space")
                                         }
                                     }
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(viewModel.canFreeSpace ? Color(hex: "FECACA") : Color.gray.opacity(0.5))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        viewModel.canFreeSpace ? Color.white.opacity(0.05) : Color.white.opacity(0.02)
-                                    )
+                                    .padding(.vertical, 10)
+                                    .background(Color.red.opacity(0.7))
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
-                                .disabled(!viewModel.canFreeSpace || viewModel.isClearingVoiceData)
-                                .alert(isPresented: $viewModel.showClearConfirmation) {
-                                    Alert(
-                                        title: Text("Free Voice Space?"),
-                                        message: Text("This will delete all voice recordings (\(viewModel.storageUsedMB) MB) from your device and cloud.\n\n✅ Your transcripts, summaries, and action items will be preserved."),
-                                        primaryButton: .destructive(Text("Delete Voice Files")) {
-                                            viewModel.clearVoiceData()
-                                        },
-                                        secondaryButton: .cancel()
-                                    )
-                                }
+                                .disabled(viewModel.isClearingVoiceData)
                             }
                             .padding(.vertical, 4)
+                            .alert("Free Voice Space?", isPresented: $viewModel.showClearConfirmation) {
+                                Button("Delete Voice Files", role: .destructive) {
+                                    viewModel.clearVoiceData()
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("This will delete all voice recordings (\(viewModel.storageUsedMB) MB) from your device and cloud.\n\nYour transcripts, summaries, and action items will be preserved.")
+                            }
+                            .alert("No Voice Files", isPresented: $viewModel.showNoStorageAlert) {
+                                Button("OK", role: .cancel) {}
+                            } message: {
+                                Text("There are no voice recordings to delete. Your storage is already clear.")
+                            }
+                            .alert("Voice Files Deleted", isPresented: $viewModel.showFreeSpaceSuccess) {
+                                Button("OK", role: .cancel) {}
+                            } message: {
+                                Text("Your voice recordings are being removed. Storage will update shortly.")
+                            }
+                            .alert("Delete Failed", isPresented: $viewModel.showFreeSpaceError) {
+                                Button("Retry", role: .destructive) {
+                                    viewModel.clearVoiceData()
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("Could not delete voice files. Please check your connection and try again.")
+                            }
                         }
-                        
+
                         // App Version
                         Text("Debrief AI \(viewModel.appVersion)")
                             .font(.caption)

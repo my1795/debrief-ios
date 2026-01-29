@@ -63,9 +63,11 @@ class TimelineViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Re-decrypt when encryption key becomes ready (no network call, just local decrypt)
+        // Uses removeDuplicates instead of dropFirst to handle the case where
+        // isKeyReady is already true when TimelineViewModel subscribes (login race condition)
         AuthSession.shared.$isKeyReady
-            .dropFirst()  // Skip initial value
-            .filter { $0 == true }  // Only when key becomes ready
+            .removeDuplicates()
+            .filter { $0 == true }
             .sink { [weak self] _ in
                 guard let self = self, let userId = self.currentUserId else { return }
                 Logger.info("Key ready, re-decrypting cached debriefs...")

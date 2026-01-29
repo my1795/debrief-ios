@@ -26,6 +26,7 @@ class SettingsViewModel: ObservableObject {
     @Published var currentPlan: String = "Loading..."
     @Published var usageCost: String = "$0.00" // Kept for now, effectively placeholder
     @Published var showClearConfirmation = false
+    @Published var showNoStorageAlert = false
     
     // Storage Quota Stats
     @Published var storageUsedMB: Int = 0
@@ -71,8 +72,13 @@ class SettingsViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
-    var canFreeSpace: Bool {
-        return currentPlan.lowercased() == "free"
+    /// Request to free voice space — shows confirmation or "nothing to delete"
+    func requestFreeSpace() {
+        if storageUsedMB > 0 {
+            showClearConfirmation = true
+        } else {
+            showNoStorageAlert = true
+        }
     }
     
     func calculateCacheSize() {
@@ -106,37 +112,32 @@ class SettingsViewModel: ObservableObject {
     }
 
     @Published var isClearingVoiceData = false
-    @Published var lastFreedStorageMessage: String?
+    @Published var showFreeSpaceSuccess = false
+    @Published var showFreeSpaceError = false
+    private var freedStorageMBValue: Int = 0
 
     func clearVoiceData() {
+        let previousMB = storageUsedMB
         isClearingVoiceData = true
 
+        // 1. Delete local audio files immediately (no network needed)
+        deleteLocalAudioFiles()
+        calculateCacheSize()
+
+        // 2. Fire backend request — 202 returns fast, backend processes in background
+        //    Firestore listener (observeQuota) will auto-update storageUsedMB when backend finishes
         Task {
             do {
-                // 1. Call backend to delete audio files (returns 202, processes async)
                 let response = try await APIService.shared.freeVoiceStorage()
+                Logger.success("Voice space cleanup accepted. Freed \(response.freedStorageMB ?? 0) MB, \(response.deletedFilesCount ?? 0) files")
 
-                let freedMB = response.freedStorageMB ?? 0
-                let deletedFiles = response.deletedFilesCount ?? 0
-                Logger.success("Request accepted. Freed \(freedMB) MB, deleted \(deletedFiles) files")
-
-                // 2. Delete local audio files only (not all documents)
-                deleteLocalAudioFiles()
-
-                // 3. Refresh quota (will get updated value once backend finishes)
-                await MainActor.run {
-                    self.lastFreedStorageMessage = response.message ?? "Voice files are being deleted..."
-                    self.isClearingVoiceData = false
-                    // Refresh quota after short delay to get updated value
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        self.fetchUserQuota()
-                    }
-                }
+                freedStorageMBValue = previousMB
+                isClearingVoiceData = false
+                showFreeSpaceSuccess = true
             } catch {
                 Logger.error("Error freeing voice storage: \(error)")
-                await MainActor.run {
-                    self.isClearingVoiceData = false
-                }
+                isClearingVoiceData = false
+                showFreeSpaceError = true
             }
         }
     }
