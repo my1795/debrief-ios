@@ -9,7 +9,26 @@ import Foundation
 import FirebaseFirestore
 import Combine
 
-class FirestoreService {
+// MARK: - Protocol
+
+protocol FirestoreServiceProtocol {
+    func fetchDebriefs(userId: String, filters: DebriefFilters?, limit: Int, startAfter: DocumentSnapshot?) async throws -> FirestoreService.FetchResult
+    func fetchDebriefsByIds(_ ids: [String], userId: String) async throws -> [Debrief]
+    func fetchAllDebriefs(userId: String) async throws -> [Debrief]
+    func fetchDebriefs(userId: String, start: Date, end: Date) async throws -> [Debrief]
+    func getDebrief(userId: String, debriefId: String) async throws -> Debrief
+    func getDebriefsCount(userId: String, start: Date, end: Date) async throws -> Int
+    func getCallsCount(userId: String, start: Date, end: Date) async throws -> Int
+    func getDailyStats(userId: String, date: Date) async throws -> FirestoreService.DailyStatsResult
+    func getUserPlan(userId: String) async throws -> UserPlan
+    func getUserQuota(userId: String) async throws -> UserQuota
+    func updateDebriefContactName(debriefId: String, contactName: String) async throws
+    func updateActionItems(debriefId: String, actionItems: [String], userId: String) async throws
+    func decryptIfNeeded(_ debrief: Debrief, userId: String) -> Debrief
+    func decryptIfNeeded(_ debriefs: [Debrief], userId: String) -> [Debrief]
+}
+
+class FirestoreService: FirestoreServiceProtocol {
     static let shared = FirestoreService()
     private let db = Firestore.firestore()
     

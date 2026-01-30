@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "BD32F79A-8A3C-4910-BB23-4EEE21139CC9",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:debrief.xcodeproj",
+      "identifier" : "E6D6B3282F16547B00F42157",
+      "name" : "debrief"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:debrief.xcodeproj",
+        "identifier" : "E6062B372F2C303B00C2280C",
+        "name" : "DebriefTests"
+      }
+    }
+  ],
+  "version" : 1
+}

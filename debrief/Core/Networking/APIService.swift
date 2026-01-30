@@ -56,7 +56,18 @@ struct APIErrorDetail: Decodable {
     let message: String
 }
 
-class APIService {
+// MARK: - Protocol
+
+protocol APIServiceProtocol {
+    func searchDebriefs(query: String, limit: Int) async throws -> [APIService.SearchResult]
+    func createDebrief(audioUrl: URL, contact: Contact, duration: TimeInterval) async throws -> Debrief
+    func exchangeKey() async throws -> EncryptionKeyResponse
+    func deleteDebrief(id: String) async throws
+    func freeVoiceStorage() async throws -> APIService.FreeVoiceStorageResponse
+    func deleteAccount() async throws -> APIService.DeleteAccountResponse
+}
+
+class APIService: APIServiceProtocol {
     static let shared = APIService()
     // Base URL is now managed by AppConfig
     private var baseURL: String { AppConfig.shared.apiBaseURL }

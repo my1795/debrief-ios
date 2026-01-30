@@ -7,9 +7,18 @@
 
 import Foundation
 
+// MARK: - Protocol
+
+protocol EncryptionKeyManagerProtocol {
+    func fetchAndStoreKey(userId: String) async throws
+    func getKey(userId: String) -> Data?
+    func ensureKeyAvailable(userId: String) async
+    func clearKey(userId: String?)
+}
+
 /// Orchestrates encryption key exchange, caching, and lifecycle management.
 /// Integrates with AuthSession for login/logout flows.
-final class EncryptionKeyManager {
+final class EncryptionKeyManager: EncryptionKeyManagerProtocol {
     static let shared = EncryptionKeyManager()
     
     private let keychainService = KeychainService.shared

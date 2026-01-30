@@ -26,42 +26,42 @@ class DebriefDetailViewModel: ObservableObject {
     
     // Services
     private let apiService: APIService
-    private let firestoreService: FirestoreService
+    private let firestoreService: any FirestoreServiceProtocol
     private let storageService: StorageService
     private let audioService: AudioPlaybackService
     private var cancellables = Set<AnyCancellable>()
-    private let userId: String
-    
+    let userId: String
+
     // Real-time listener for status updates
     private var debriefListener: ListenerRegistration?
-    
-    init(debrief: Debrief, userId: String, apiService: APIService = .shared, firestoreService: FirestoreService = .shared, storageService: StorageService = .shared) {
+
+    init(debrief: Debrief, userId: String, apiService: APIService = .shared, firestoreService: any FirestoreServiceProtocol = FirestoreService.shared, storageService: StorageService = .shared, skipInitialLoad: Bool = false) {
         self.debrief = debrief
         self.userId = userId
         self.apiService = apiService
         self.firestoreService = firestoreService
         self.storageService = storageService
         self.audioService = AudioPlaybackService()
-        
+
         // Debug Logging
         Logger.debug("Init with Debrief ID: \(debrief.id)")
         Logger.debug("Contact: \(debrief.contactName), Status: \(debrief.status)")
         Logger.debug("Audio URL: \(debrief.audioUrl ?? "N/A")")
         Logger.debug("Transcript Length: \(debrief.transcript?.count ?? 0), Action Items: \(debrief.actionItems?.count ?? 0)")
-        
+
         // Sync Audio State
         audioService.$isPlaying
             .sink { [weak self] isPlaying in
                 self?.isPlaying = isPlaying
             }
             .store(in: &cancellables)
-        
+
         audioService.$isLoading
             .sink { [weak self] isLoading in
                 self?.isLoading = isLoading
             }
             .store(in: &cancellables)
-            
+
         audioService.$decryptionError
             .receive(on: DispatchQueue.main)
             .sink { [weak self] error in
@@ -70,29 +70,31 @@ class DebriefDetailViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-        
+
         // Sync Audio Progress
         audioService.$currentTime
             .sink { [weak self] time in
                 self?.currentTime = time
             }
             .store(in: &cancellables)
-        
+
         audioService.$duration
             .sink { [weak self] duration in
                 self?.audioDuration = duration
             }
             .store(in: &cancellables)
-        
+
         audioService.$playbackRate
             .sink { [weak self] rate in
                 self?.playbackRate = rate
             }
             .store(in: &cancellables)
-            
+
+        guard !skipInitialLoad else { return }
+
         // Load full details immediately
         loadDebriefDetails()
-        
+
         // Start real-time listener if still processing
         startListeningIfProcessing()
     }
@@ -198,8 +200,10 @@ class DebriefDetailViewModel: ObservableObject {
         }
         
         Logger.info("Starting real-time listener for status updates...")
-        
-        debriefListener = firestoreService.listenToDebrief(debriefId: debrief.id) { [weak self] result in
+
+        guard let concreteService = firestoreService as? FirestoreService else { return }
+
+        debriefListener = concreteService.listenToDebrief(debriefId: debrief.id) { [weak self] result in
             guard let self = self else { return }
             
             Task { @MainActor in

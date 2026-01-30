@@ -23,16 +23,17 @@ class HomeViewModel: ObservableObject {
     @Published var homeStats: HomeStats = HomeStats()
     @Published var error: AppError? = nil  // User-facing errors
     
-    private let firestoreService = FirestoreService.shared
+    private let firestoreService: FirestoreServiceProtocol
     private let contactStoreService: ContactStoreServiceProtocol
     private let statsService: StatsServiceProtocol
-    
+
     // Combine logic to observe UploadManager
     private var cancellables = Set<AnyCancellable>()
-    
-    init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService(), statsService: StatsServiceProtocol = StatsService()) {
+
+    init(contactStoreService: ContactStoreServiceProtocol = ContactStoreService(), statsService: StatsServiceProtocol = StatsService(), firestoreService: FirestoreServiceProtocol = FirestoreService.shared) {
         self.contactStoreService = contactStoreService
         self.statsService = statsService
+        self.firestoreService = firestoreService
         
         // Observe pending uploads and re-filter list when they change
         
@@ -65,7 +66,7 @@ class HomeViewModel: ObservableObject {
     func fetchDebriefs(userId: String) async {
         do {
             // Limit to 50 items to prevent loading 10k+ documents on Home
-            let result = try await firestoreService.fetchDebriefs(userId: userId, limit: 50, startAfter: nil)
+            let result = try await firestoreService.fetchDebriefs(userId: userId, filters: nil, limit: 50, startAfter: nil)
             
             // Resolve Names using shared ContactResolver (with caching)
             let resolvedDebriefs = await ContactResolver.shared.resolveDebriefs(result.debriefs)

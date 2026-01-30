@@ -8,11 +8,19 @@
 import Foundation
 import CryptoKit
 
+// MARK: - Protocol
+
+protocol EncryptionServiceProtocol {
+    func decrypt(_ base64String: String, using key: Data) throws -> String
+    func encrypt(_ plaintext: String, using key: Data) throws -> String
+    func decryptAudioData(_ encryptedData: Data, using key: Data) throws -> Data
+}
+
 /// Handles AES-256-GCM decryption of encrypted debrief fields.
 /// Encrypted format:
 /// - Text: base64(nonce + ciphertext + tag)
 /// - Audio: nonce + ciphertext + tag (raw binary)
-final class EncryptionService {
+final class EncryptionService: EncryptionServiceProtocol {
     static let shared = EncryptionService()
     
     // MARK: - Constants
